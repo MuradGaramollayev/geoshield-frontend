@@ -1,86 +1,372 @@
 @import "tailwindcss";
 
+/* ══════════════════════════════════════════════════════════════════════
+   GeoShield design system — tokens
+   Palette sampled from the Enterprise reference screenshots (see
+   docs/DESIGN_SYSTEM.md). Every colour, size and shadow in the app should
+   come from here; pages must not invent their own.
+   ══════════════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* ── Typefaces ─────────────────────────────────────────────── */
+  --font-sans: "Manrope Variable", "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  /* ── Neutrals (sampled) ────────────────────────────────────── */
+  --color-canvas: #DDDBDC;        /* L0  frame behind the app            */
+  --color-surface: #F1F1F1;       /* L1  app background + card fill      */
+  --color-sunken: #E7E7E7;        /*     wells, tracks, table stripes    */
+  --color-well: #DDDDDD;          /*     bar tracks, disabled fills      */
+  --color-paper: #FFFFFF;         /* L3  tiles, inputs, active controls  */
+  --color-line: #E3E3E3;          /*     hairlines                        */
+  --color-line-strong: #D2D2D2;   /*     dividers that must read          */
+
+  --color-ink: #161616;           /* primary text                        */
+  --color-ink-2: #1C1C1C;         /* dark buttons, dark bars             */
+  --color-text-2: #5E5E5E;        /* secondary text   (7.0:1 on surface) */
+  --color-text-3: #767676;        /* meta text        (4.5:1 on surface) */
+  --color-text-4: #A3A3A3;        /* decorative only: axis ticks          */
+
+  /* ── Accent (sampled from "11 High" bar + donut) ───────────── */
+  --color-accent: #FC582A;
+  --color-accent-strong: #E4461A; /* hover / pressed                     */
+  --color-accent-ink: #B93A12;    /* accent as text on light (4.8:1)     */
+  --color-accent-300: #F6A48E;
+  --color-accent-200: #F3D2C9;
+  --color-accent-100: #F6E7DF;
+
+  /* ── Status ─────────────────────────────────────────────────── */
+  --color-positive: #2E8B6A;
+  --color-positive-tint: #D3EEE2;
+  --color-caution: #8A5A07;
+  --color-caution-tint: #FBEBCF;
+  --color-info: #1D7F8C;
+  --color-info-tint: #D5F2F5;
+  --color-violet: #7A4BB2;
+  --color-violet-tint: #EADFF7;
+
+  /* ── Severity: the ONLY severity colours in the product ─────── */
+  /* solid = chips/bars, on = text on solid, tint = soft bg, text = text on tint */
+  --color-sev-critical: #B3122E;
+  --color-sev-critical-on: #FFFFFF;
+  --color-sev-critical-tint: #F7DCE0;
+  --color-sev-critical-text: #9E0F28;
+  --color-sev-high: #FC582A;
+  --color-sev-high-on: #1A0A04;
+  --color-sev-high-tint: #FFE3D8;
+  --color-sev-high-text: #B3380F;
+  --color-sev-medium: #EFA532;
+  --color-sev-medium-on: #1F1405;
+  --color-sev-medium-tint: #FBEBCF;
+  --color-sev-medium-text: #875806;
+  --color-sev-low: #23845F;
+  --color-sev-low-on: #FFFFFF;
+  --color-sev-low-tint: #D3EEE2;
+  --color-sev-low-text: #1B6B4D;
+
+  /* ── Type scale (one scale, used everywhere) ────────────────── */
+  --text-2xs: 0.6875rem;  --text-2xs--line-height: 1rem;      /* 11 */
+  --text-xs: 0.75rem;     --text-xs--line-height: 1.125rem;   /* 12 */
+  --text-sm: 0.8125rem;   --text-sm--line-height: 1.25rem;    /* 13 */
+  --text-base: 0.875rem;  --text-base--line-height: 1.375rem; /* 14 */
+  --text-md: 1rem;        --text-md--line-height: 1.5rem;     /* 16 */
+  --text-lg: 1.25rem;     --text-lg--line-height: 1.75rem;    /* 20 */
+  --text-xl: 1.5rem;      --text-xl--line-height: 2rem;       /* 24 */
+  --text-2xl: 2rem;       --text-2xl--line-height: 2.375rem;  /* 32 */
+  --text-3xl: 2.75rem;    --text-3xl--line-height: 3rem;      /* 44 */
+  --text-4xl: 3.75rem;    --text-4xl--line-height: 3.875rem;  /* 60 */
+  --text-5xl: 5rem;       --text-5xl--line-height: 5rem;      /* 80 */
+
+  /* ── Radii ──────────────────────────────────────────────────── */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+
+  /* ── Elevation (see .e1–.e4 below) ──────────────────────────── */
+  --shadow-e1: inset 0 0 0 3px rgba(255, 255, 255, 0.75), 0 0 0 1px rgba(0, 0, 0, 0.035);
+  --shadow-e2: inset 0 0 0 1.5px rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(0, 0, 0, 0.05),
+               0 1px 2px rgba(22, 22, 22, 0.04), 0 10px 28px -16px rgba(22, 22, 22, 0.16);
+  --shadow-e2-hover: inset 0 0 0 1.5px rgba(255, 255, 255, 1), 0 0 0 1px rgba(0, 0, 0, 0.07),
+               0 2px 4px rgba(22, 22, 22, 0.05), 0 18px 36px -18px rgba(22, 22, 22, 0.24);
+  --shadow-e3: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(22, 22, 22, 0.06),
+               0 4px 12px -6px rgba(22, 22, 22, 0.12);
+  --shadow-e4: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 24px 64px -20px rgba(22, 22, 22, 0.35),
+               0 8px 20px -10px rgba(22, 22, 22, 0.18);
+
+  /* ── Motion ─────────────────────────────────────────────────── */
+  --ease-out-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-pulse-ring: pulse-ring 2.6s var(--ease-out-soft) infinite;
+  --animate-live-dot: live-dot 2s ease-in-out infinite;
+
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to   { background-position: 200% 0; }
+  }
+  @keyframes pulse-ring {
+    0%   { transform: scale(0.6); opacity: 0.55; }
+    100% { transform: scale(2.4); opacity: 0; }
+  }
+  @keyframes live-dot {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+  }
+}
+
+/* ── Panel temperature ─────────────────────────────────────────────
+   Same tokens, different pacing and density. Set on the layout root.   */
 :root {
-  --bg-primary: #0A0F1E;
-  --bg-secondary: #111827;
-  --bg-panel: #1F2937;
-  --border-color: #374151;
-  --emerald: #10B981;
-  --blue: #3B82F6;
-  --danger: #EF4444;
-  --warning: #F59E0B;
-  --text-primary: #F9FAFB;
-  --text-secondary: #9CA3AF;
-  --border-glow: rgba(56, 189, 248, 0.25);
+  --dur: 200ms;
+  --pad-card: 1.25rem;
+  --gap-grid: 1rem;
+}
+[data-panel="analyst"] {
+  --dur: 150ms;
+  --pad-card: 1rem;
+  --gap-grid: 0.75rem;
+}
+[data-panel="enterprise"] {
+  --dur: 280ms;
+  --pad-card: 1.75rem;
+  --gap-grid: 1.5rem;
 }
 
-body {
-  margin: 0;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: 'Inter', system-ui, sans-serif;
-  position: relative;
-  background-image:
-    linear-gradient(rgba(56, 189, 248, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(56, 189, 248, 0.035) 1px, transparent 1px),
-    radial-gradient(ellipse 70% 45% at 15% -10%, rgba(16, 185, 129, 0.10), transparent),
-    radial-gradient(ellipse 60% 40% at 90% 0%, rgba(56, 189, 248, 0.08), transparent),
-    radial-gradient(ellipse 55% 45% at 50% 100%, rgba(244, 63, 94, 0.05), transparent);
-  background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%, 100% 100%;
-  background-attachment: fixed;
+/* ── Dark scope: same semantic tokens, remapped (landing, map overlays) ─ */
+.theme-dark {
+  --color-canvas: #040B10;
+  --color-surface: #07131A;
+  --color-sunken: #0B1C25;
+  --color-well: #13262F;
+  --color-paper: #0F222C;
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-strong: rgba(255, 255, 255, 0.16);
+  --color-ink: #F3F5F4;
+  --color-ink-2: #FFFFFF;
+  --color-text-2: #B4C0C4;
+  --color-text-3: #8A9AA0;
+  --color-text-4: #5D6E75;
+  --color-accent-ink: #FF8A63;
+  --color-accent-100: rgba(252, 88, 42, 0.14);
+  --color-accent-200: rgba(252, 88, 42, 0.24);
+  --shadow-e2: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.07),
+               0 18px 40px -24px rgba(0, 0, 0, 0.8);
+  --shadow-e2-hover: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 0 0 1px rgba(255, 255, 255, 0.14),
+               0 24px 48px -24px rgba(0, 0, 0, 0.9);
+  --shadow-e3: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.09);
+  color: var(--color-ink);
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    rgba(16, 185, 129, 0.025) 50%,
-    transparent 100%
-  );
-  background-size: 100% 200px;
-  animation: scan-sweep 8s linear infinite;
+/* ── Base ──────────────────────────────────────────────────────── */
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    margin: 0;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    font-feature-settings: "cv11", "ss01";
+  }
+  ::selection { background: var(--color-accent-200); color: var(--color-ink); }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  input, select, textarea, button { font: inherit; color: inherit; }
+
+  * { scrollbar-width: thin; scrollbar-color: var(--color-line-strong) transparent; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
-@keyframes scan-sweep {
-  0% { background-position: 0 -200px; }
-  100% { background-position: 0 100vh; }
+/* ── Components ────────────────────────────────────────────────── */
+@layer components {
+  /* Elevation levels. e1 = grouping well, e2 = card, e3 = paper, e4 = floating glass */
+  .e1 {
+    background: var(--color-surface);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-e1);
+  }
+  .e2 {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-e2);
+  }
+  .e3 {
+    background: var(--color-paper);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-e3);
+  }
+  .e4 {
+    background: rgba(250, 250, 250, 0.82);
+    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-e4);
+  }
+  .theme-dark .e4 {
+    background: rgba(8, 20, 28, 0.8);
+  }
+
+  .interactive {
+    transition:
+      box-shadow var(--dur) var(--ease-out-soft),
+      transform var(--dur) var(--ease-out-soft),
+      background-color var(--dur) var(--ease-out-soft),
+      border-color var(--dur) var(--ease-out-soft),
+      color var(--dur) var(--ease-out-soft);
+  }
+  .e2.interactive:hover {
+    box-shadow: var(--shadow-e2-hover);
+    transform: translateY(-2px);
+  }
+
+  /* Skeleton shimmer — used instead of "Loading..." text or bare spinners */
+  .skeleton {
+    border-radius: var(--radius-xs);
+    background: linear-gradient(
+      90deg,
+      var(--color-sunken) 0%,
+      color-mix(in srgb, var(--color-paper) 70%, var(--color-sunken)) 50%,
+      var(--color-sunken) 100%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+
+  .num { font-variant-numeric: tabular-nums lining-nums; }
+  .code { font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; letter-spacing: -0.01em; }
+
+  /* Form control shell (inputs, selects) */
+  .field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-paper);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-e3);
+    padding: 0 0.75rem;
+    min-height: 2.5rem;
+    transition: box-shadow var(--dur) var(--ease-out-soft);
+  }
+  .field:focus-within {
+    box-shadow: 0 0 0 1px var(--color-accent), 0 0 0 4px var(--color-accent-100);
+  }
+  .field input, .field select, .field textarea {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: 0;
+    outline: none;
+    padding: 0.5rem 0;
+    font-size: var(--text-base);
+    color: var(--color-ink);
+  }
+  .field input::placeholder, .field textarea::placeholder { color: var(--color-text-3); }
+  .field select { appearance: none; cursor: pointer; }
+
+  /* Custom checkbox (replaces the default browser checkbox) */
+  .check {
+    appearance: none;
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 5px;
+    background: var(--color-paper);
+    box-shadow: inset 0 0 0 1.5px var(--color-line-strong);
+    display: inline-grid;
+    place-content: center;
+    cursor: pointer;
+    transition: background-color var(--dur), box-shadow var(--dur);
+  }
+  .check::after {
+    content: "";
+    width: 0.55rem;
+    height: 0.3rem;
+    border-left: 2px solid var(--color-paper);
+    border-bottom: 2px solid var(--color-paper);
+    transform: rotate(-45deg) translate(1px, -1px) scale(0);
+    transition: transform var(--dur) var(--ease-out-soft);
+  }
+  .check:checked { background: var(--color-ink-2); box-shadow: none; }
+  .check:checked::after { transform: rotate(-45deg) translate(1px, -1px) scale(1); }
+
+  /* Toggle switch */
+  .switch {
+    appearance: none;
+    width: 2.25rem;
+    height: 1.25rem;
+    border-radius: 999px;
+    background: var(--color-well);
+    position: relative;
+    cursor: pointer;
+    transition: background-color var(--dur) var(--ease-out-soft);
+  }
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 999px;
+    background: var(--color-paper);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: transform var(--dur) var(--ease-out-soft);
+  }
+  .switch:checked { background: var(--color-accent); }
+  .switch:checked::after { transform: translateX(1rem); }
+
+  .live-dot {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 999px;
+    background: var(--color-positive);
+    animation: var(--animate-live-dot);
+  }
 }
 
-#root {
-  position: relative;
-  z-index: 1;
-}
-
-.card-glow {
-  background: var(--bg-panel);
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
-}
-.card-glow:hover {
-  border-color: var(--border-glow);
-  box-shadow: 0 0 24px rgba(56, 189, 248, 0.07), inset 0 1px 0 rgba(255,255,255,0.03);
-  transform: translateY(-2px);
-}
-
-.bg-surface {
-  box-shadow: 0 1px 0 rgba(56, 189, 248, 0.08);
-}
-
-.landing-bg {
-  position: relative;
+/* ── TEMPORARY: pre-sprint landing styles ──────────────────────────
+   Keeps the current landing page legible until Section 4 rebuilds it on
+   the design system. Scoped to .legacy-landing; delete with the old
+   landing components. */
+.legacy-landing {
+  background-color: #0A0F1E;
+  color: #F9FAFB;
   background-image:
     linear-gradient(rgba(56, 189, 248, 0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgba(56, 189, 248, 0.05) 1px, transparent 1px),
     radial-gradient(ellipse 90% 60% at 20% -10%, rgba(16, 185, 129, 0.16), transparent),
-    radial-gradient(ellipse 80% 55% at 85% 15%, rgba(56, 189, 248, 0.14), transparent),
-    radial-gradient(ellipse 70% 50% at 50% 100%, rgba(167, 139, 250, 0.10), transparent),
-    radial-gradient(ellipse 60% 40% at 90% 90%, rgba(244, 63, 94, 0.08), transparent);
-  background-size: 56px 56px, 56px 56px, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+    radial-gradient(ellipse 80% 55% at 85% 15%, rgba(56, 189, 248, 0.14), transparent);
+  background-size: 56px 56px, 56px 56px, 100% 100%, 100% 100%;
   background-attachment: fixed;
 }
+.legacy-landing .card-glow {
+  background: #1F2937;
+  border: 1px solid #374151;
+  border-radius: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.legacy-landing .card-glow:hover { border-color: rgba(56, 189, 248, 0.25); transform: translateY(-2px); }
+.legacy-landing .bg-navy { background-color: #0A0F1E; }
+.legacy-landing .text-navy { color: #0A0F1E; }
+.legacy-landing .bg-emerald { background-color: #10B981; }
+.legacy-landing .text-emerald { color: #10B981; }
+.legacy-landing .bg-surface { background-color: #111827; }
+.legacy-landing .bg-panel { background-color: #1F2937; }

@@ -1,147 +1,119 @@
-import { useEffect, useState } from "react";
-import { ShieldAlert, Globe, Clock, AlertOctagon } from "lucide-react";
-import EnterpriseRiskBanner from "../../components/enterprise/EnterpriseRiskBanner";
-import EnterpriseKpiCard from "../../components/enterprise/EnterpriseKpiCard";
-import EnterpriseWorldMap from "../../components/enterprise/EnterpriseWorldMap";
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { BellRing, Clock, ShieldAlert, Skull } from "lucide-react";
 import {
-  fetchStatus,
-  fetchCountries,
-  fetchIncidents,
-  computeMeanResponseMinutes,
-  computeCriticalHighRatio,
+  computeCriticalHighRatio, computeMeanResponseMinutes, fetchCountries, fetchIncidents, fetchStatus, fetchTimeline,
 } from "../../services/api";
-import type { StatusData, CountryRisk } from "../../services/api";
+import { useAsync } from "../../hooks/useAsync";
+import { SEVERITY } from "../../design/tokens";
+import { useMotion } from "../../design/panel";
+import { getUser } from "../../utils/auth";
+import RiskIndexCard from "../../components/common/RiskIndexCard";
+import RiskScoreNote from "../../components/common/RiskScoreNote";
+import WorldMap from "../../components/charts/WorldMap";
+import { Card, CardHeader, ErrorState, SeverityBadge, Skeleton, SkeletonCard, StatTile } from "../../components/ui";
 
-function riskLevel(score: number): "LOW" | "MODERATE" | "ELEVATED" | "HIGH" | "CRITICAL" {
-  if (score < 20) return "LOW";
-  if (score < 40) return "MODERATE";
-  if (score < 60) return "ELEVATED";
-  if (score < 80) return "HIGH";
-  return "CRITICAL";
-}
+const OPEN = new Set(["NEW", "ASSIGNED", "INVESTIGATING"]);
 
 export default function EnterpriseDashboard() {
-  const [status, setStatus] = useState<StatusData | null>(null);
-  const [countries, setCountries] = useState<CountryRisk[]>([]);
-  const [meanResponse, setMeanResponse] = useState<number | null>(null);
-  const [criticalRatio, setCriticalRatio] = useState<number>(0);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, loading, reload } = useAsync(
+    () => Promise.all([fetchStatus(), fetchCountries(), fetchIncidents(), fetchTimeline(90)]),
+    [],
+  );
+  const [status, countries, inc, tl] = data ?? [null, null, null, null];
+  const m = useMotion();
+  const user = getUser();
 
-  useEffect(() => {
-    Promise.all([fetchStatus(), fetchCountries(), fetchIncidents()])
-      .then(([statusRes, countriesRes, incidentsRes]) => {
-        setStatus(statusRes);
-        setCountries(countriesRes.countries);
-        setMeanResponse(computeMeanResponseMinutes(incidentsRes.incidents));
-        setCriticalRatio(computeCriticalHighRatio(incidentsRes.incidents));
-      })
-      .catch((err) => setError(err.message));
-  }, []);
+  const top = useMemo(() => [...(countries?.countries ?? [])].sort((a, b) => b.risk_score - a.risk_score).slice(0, 8), [countries]);
+  const incidents = inc?.incidents ?? [];
+  const open = incidents.filter((i) => OPEN.has(i.status)).length;
+  const ransomware = (tl?.events ?? []).filter((e) => e.ransomware).length;
 
-  if (error) {
-    return (
-      <div className="p-6 text-rose-400 text-sm">
-        Failed to connect to backend: {error}
-      </div>
-    );
-  }
-
-  if (!status) {
-    return <div className="p-6 text-slate-400 text-sm">Loading executive summary...</div>;
-  }
-
-  const { countries: countryCount, total_threats, avg_risk } = status.data;
-
-  const top10 = [...countries]
-    .sort((a, b) => b.risk_score - a.risk_score)
-    .slice(0, 10);
+  if (error) return <ErrorState message={error} onRetry={reload} />;
 
   return (
-    <div className="p-8 space-y-6 max-w-7xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100">Executive Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Strategic overview across {countryCount} monitored countries
+    <div className="space-y-[var(--gap-grid)]">
+      <motion.header
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: m.enter, ease: m.ease }}
+        className="mb-2"
+      >
+        <h1 className="text-2xl font-semibold tracking-[-0.02em] text-ink">
+          {user ? `Welcome back, ${user.firstName}` : "Strategic overview"}
+        </h1>
+        <p className="text-md text-text-2 mt-1 max-w-2xl">
+          Your organisation's external threat exposure at a glance: overall risk, where it comes from, and how the team is responding.
         </p>
+      </motion.header>
+
+      {loading || !status ? <Skeleton className="h-56 rounded-[20px]" /> : <RiskIndexCard status={status} />}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-[var(--gap-grid)]">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} lines={1} />)
+        ) : (
+          <>
+            <StatTile icon={<BellRing size={18} />} label="Open alerts" value={open} footer={`${incidents.length} incidents tracked`} />
+            <StatTile
+              icon={<ShieldAlert size={18} />}
+              label="Critical or high incidents"
+              value={computeCriticalHighRatio(incidents)}
+              suffix="%"
+              footer="Share of all tracked incidents"
+              delay={0.07}
+            />
+            <StatTile
+              icon={<Clock size={18} />}
+              label="Mean time to latest update"
+              value={computeMeanResponseMinutes(incidents)}
+              suffix="min"
+              footer={computeMeanResponseMinutes(incidents) === null ? "No incident has moved past New yet" : "Created → most recent status change"}
+              delay={0.14}
+            />
+            <StatTile
+              icon={<Skull size={18} />}
+              label="Ransomware-linked CVEs"
+              value={ransomware}
+              valueTone={ransomware ? SEVERITY.CRITICAL.text : undefined}
+              footer="Added to CISA KEV, last 90 days"
+              delay={0.21}
+            />
+          </>
+        )}
       </div>
 
-      <EnterpriseRiskBanner
-        score={avg_risk}
-        level={riskLevel(avg_risk)}
-        countriesTracked={countryCount}
-      />
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <EnterpriseKpiCard
-          label="Global Risk Index"
-          value={avg_risk}
-          icon={ShieldAlert}
-          accentColor="#38bdf8"
-          delay={0.1}
-        />
-        <EnterpriseKpiCard
-          label="Active Threat Indicators"
-          value={total_threats.toLocaleString()}
-          icon={Globe}
-          accentColor="#34d399"
-          delay={0.15}
-        />
-        <EnterpriseKpiCard
-          label="Mean Response Time"
-          value={meanResponse !== null ? `${meanResponse}m` : "—"}
-          icon={Clock}
-          trendLabel={meanResponse !== null ? "avg. across resolved incidents" : "no resolved incidents yet"}
-          accentColor="#a78bfa"
-          delay={0.2}
-        />
-        <EnterpriseKpiCard
-          label="Critical/High Ratio"
-          value={`${criticalRatio}%`}
-          icon={AlertOctagon}
-          trendLabel="of active incidents"
-          accentColor="#f43f5e"
-          delay={0.25}
-        />
-      </div>
-
-      <EnterpriseWorldMap />
-
-      <div className="card-glow p-6">
-        <h3 className="text-base font-semibold text-slate-100 mb-4">Top 10 Risk Countries</h3>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-800 text-left">
-              <th className="pb-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Rank</th>
-              <th className="pb-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Country</th>
-              <th className="pb-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Score</th>
-              <th className="pb-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Trend</th>
-              <th className="pb-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Primary Threat</th>
-            </tr>
-          </thead>
-          <tbody>
-            {top10.map((c, i) => (
-              <tr key={c.code} className="border-b border-slate-800/60">
-                <td className="py-3 text-slate-500 font-mono text-xs">#{i + 1}</td>
-                <td className="py-3 text-slate-200 font-medium">{c.name}</td>
-                <td className="py-3">
-                  <span
-                    className="text-sm font-bold"
-                    style={{
-                      color: c.risk_level === "CRITICAL" ? "#f43f5e" :
-                             c.risk_level === "HIGH" ? "#fb923c" :
-                             c.risk_level === "MEDIUM" ? "#fbbf24" : "#34d399",
-                    }}
-                  >
-                    {c.risk_score}
+      <div className="grid grid-cols-1 2xl:grid-cols-3 gap-[var(--gap-grid)]">
+        <div className="2xl:col-span-2">
+          <WorldMap title="Where exposure comes from" description="Countries coloured by risk score. Select one for a strategic summary." />
+        </div>
+        <Card>
+          <CardHeader
+            title="Highest-exposure countries"
+            actions={<Link to="/enterprise/analytics" className="text-sm font-semibold text-accent-ink hover:underline">Analytics</Link>}
+          />
+          {loading ? (
+            <div className="space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-9" />)}</div>
+          ) : (
+            <ol className="divide-y divide-line">
+              {top.map((c, i) => (
+                <li key={c.code} className="flex items-center gap-4 py-3">
+                  <span className="num text-sm text-text-3 w-5">{i + 1}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-base font-semibold text-ink truncate">{c.name}</span>
+                    <span className="block text-sm text-text-3">{c.total_threats.toLocaleString()} indicators</span>
                   </span>
-                </td>
-                <td className="py-3 text-slate-400 capitalize">{c.trend}</td>
-                <td className="py-3 text-slate-400">{c.primary_attack}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  <span className="num text-lg font-medium text-ink">{c.risk_score}</span>
+                  <SeverityBadge severity={c.risk_level} />
+                </li>
+              ))}
+            </ol>
+          )}
+        </Card>
       </div>
+
+      <RiskScoreNote />
     </div>
   );
 }

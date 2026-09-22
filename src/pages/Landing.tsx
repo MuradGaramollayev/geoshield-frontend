@@ -17,7 +17,7 @@ import AboutFounder from "../components/landing/AboutFounder";
 
 export default function Landing() {
   return (
-    <div className="bg-navy min-h-screen landing-bg">
+    <div className="legacy-landing min-h-screen">
       <Navbar />
       <Hero />
       <StatsBar />

@@ -1,145 +1,125 @@
-import { useEffect, useState } from "react";
-import {
-  ComposableMap,
-  Geographies,
-  Geography,
-} from "react-simple-maps";
+import { memo, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { ComposableMap, Geographies, Geography } from "react-simple-maps";
 import { fetchCountries } from "../../services/api";
 import type { CountryRisk } from "../../services/api";
 import { isoNumericToAlpha2 } from "../../data/isoNumericToAlpha2";
+import { riskColor, riskRampCss } from "../../design/tokens";
+import { useAsync } from "../../hooks/useAsync";
 import CountryDetailPanel from "./CountryDetailPanel";
+import { Card, CardHeader, ErrorState, SeverityBadge, Skeleton } from "../ui";
 
 const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
+const NO_DATA = "#E4E2E0";
 
-const RISK_COLOR: Record<string, string> = {
-  CRITICAL: "#f43f5e",
-  HIGH: "#fb923c",
-  MEDIUM: "#fbbf24",
-  LOW: "#34d399",
-};
-const NO_DATA_COLOR = "rgba(148,163,184,0.12)";
+interface Hover {
+  c: CountryRisk;
+  x: number;
+  y: number;
+}
 
-export default function WorldMap() {
-  const [countries, setCountries] = useState<Record<string, CountryRisk>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [hovered, setHovered] = useState<CountryRisk | null>(null);
-  const [selectedCode, setSelectedCode] = useState<string | null>(null);
+const Shapes = memo(function Shapes({
+  byCode,
+  onHover,
+  onSelect,
+}: {
+  byCode: Record<string, CountryRisk>;
+  onHover: (h: Hover | null) => void;
+  onSelect: (code: string) => void;
+}) {
+  return (
+    <Geographies geography={GEO_URL}>
+      {({ geographies }) =>
+        geographies.map((geo) => {
+          const a2 = isoNumericToAlpha2[String(geo.id).padStart(3, "0")];
+          const c = a2 ? byCode[a2] : undefined;
+          const fill = c ? riskColor(c.risk_score) : NO_DATA;
+          return (
+            <Geography
+              key={geo.rsmKey}
+              geography={geo}
+              onMouseMove={(e) => c && onHover({ c, x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY })}
+              onMouseLeave={() => onHover(null)}
+              onClick={() => c && onSelect(c.code)}
+              style={{
+                default: { fill, stroke: "#F1F1F1", strokeWidth: 0.5, outline: "none", transition: "fill 200ms, opacity 200ms" },
+                hover: { fill, stroke: "#161616", strokeWidth: c ? 1 : 0.5, outline: "none", cursor: c ? "pointer" : "default" },
+                pressed: { fill, outline: "none" },
+              }}
+            />
+          );
+        })
+      }
+    </Geographies>
+  );
+});
 
-  useEffect(() => {
-    fetchCountries()
-      .then((data) => {
-        const map: Record<string, CountryRisk> = {};
-        for (const c of data.countries) {
-          map[c.code] = c;
-        }
-        setCountries(map);
-      })
-      .catch((err) => setError(err.message));
-  }, []);
+/** Global risk choropleth (Section 1 styling; replaced by the hex map in Section 3). */
+export default function WorldMap({ title = "Global risk map", description }: { title?: string; description?: string }) {
+  const { data, error, loading, reload } = useAsync(fetchCountries, []);
+  const [hover, setHover] = useState<Hover | null>(null);
+  const [params, setParams] = useSearchParams();
+  const selected = params.get("country"); // selection lives in the URL so it can be deep-linked
 
-  if (error) {
-    return (
-      <div className="card-glow p-6 text-rose-400 text-sm">
-        Failed to load map data: {error}
-      </div>
-    );
-  }
+  const byCode = useMemo(() => Object.fromEntries((data?.countries ?? []).map((c) => [c.code, c])), [data]);
+  const select = (code: string | null) => {
+    const next = new URLSearchParams(params);
+    if (code) next.set("country", code);
+    else next.delete("country");
+    setParams(next, { replace: true });
+  };
+
+  if (error) return <ErrorState message={error} onRetry={reload} />;
 
   return (
-    <div className="card-glow p-5 relative">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-slate-200">
-          Global Risk Map
-        </h3>
-        <div className="flex items-center gap-3 text-[11px] text-slate-400">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ background: RISK_COLOR.LOW }} />
-            Low
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ background: RISK_COLOR.MEDIUM }} />
-            Medium
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ background: RISK_COLOR.HIGH }} />
-            High
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ background: RISK_COLOR.CRITICAL }} />
-            Critical
-          </span>
-        </div>
-      </div>
-
-      <div className="relative">
-        <ComposableMap
-          projectionConfig={{ scale: 130 }}
-          width={800}
-          height={400}
-          style={{ width: "100%", height: "auto" }}
-        >
-          <Geographies geography={GEO_URL}>
-            {({ geographies }) =>
-              geographies.map((geo) => {
-                const numericId = String(geo.id).padStart(3, "0");
-                const alpha2 = isoNumericToAlpha2[numericId];
-                const data = alpha2 ? countries[alpha2] : undefined;
-                const fill = data ? RISK_COLOR[data.risk_level] : NO_DATA_COLOR;
-
-                return (
-                  <Geography
-                    key={geo.rsmKey}
-                    geography={geo}
-                    onMouseEnter={() => data && setHovered(data)}
-                    onMouseLeave={() => setHovered(null)}
-                    onClick={() => data && setSelectedCode(data.code)}
-                    style={{
-                      default: {
-                        fill,
-                        stroke: "#0b1220",
-                        strokeWidth: 0.5,
-                        outline: "none",
-                      },
-                      hover: {
-                        fill: data ? fill : NO_DATA_COLOR,
-                        stroke: "#38bdf8",
-                        strokeWidth: 1,
-                        outline: "none",
-                        cursor: data ? "pointer" : "default",
-                      },
-                      pressed: { outline: "none" },
-                    }}
-                  />
-                );
-              })
-            }
-          </Geographies>
-        </ComposableMap>
-
-        {hovered && (
-          <div className="absolute top-2 left-2 bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-sm pointer-events-none shadow-2xl min-w-[180px]">
-            <p className="font-bold text-slate-50 mb-2 text-base">{hovered.name}</p>
-            <p className="text-slate-300 mb-1">
-              Risk:{" "}
-              <span className="font-semibold" style={{ color: RISK_COLOR[hovered.risk_level] }}>
-                {hovered.risk_score} ({hovered.risk_level})
-              </span>
-            </p>
-            <p className="text-slate-300 mb-1">
-              Threats: <span className="font-semibold text-slate-100">{hovered.total_threats.toLocaleString()}</span>
-            </p>
-            <p className="text-slate-300">
-              Primary attack: <span className="font-semibold text-slate-100">{hovered.primary_attack}</span>
-            </p>
-            <p className="text-slate-500 text-xs mt-2">Click for details</p>
+    <Card>
+      <CardHeader
+        title={title}
+        description={description ?? "Colour follows each country's risk score. Click a country for detail."}
+        actions={
+          <div className="w-56">
+            <div className="h-2 rounded-full" style={{ background: riskRampCss() }} />
+            <div className="flex justify-between text-2xs text-text-3 mt-1 num">
+              <span>0</span><span>30</span><span>45</span><span>65</span><span>100</span>
+            </div>
           </div>
-        )}
-      </div>
-
-      <CountryDetailPanel
-        countryCode={selectedCode}
-        onClose={() => setSelectedCode(null)}
+        }
       />
-    </div>
+      <div className="relative">
+        {loading ? (
+          <Skeleton className="w-full aspect-[2/1] rounded-[16px]" />
+        ) : (
+          <ComposableMap projectionConfig={{ scale: 150 }} width={800} height={400} style={{ width: "100%", height: "auto" }}>
+            <Shapes byCode={byCode} onHover={setHover} onSelect={select} />
+          </ComposableMap>
+        )}
+        <AnimatePresence>
+          {hover && (
+            <motion.div
+              key="tip"
+              className="e4 pointer-events-none absolute z-10 px-4 py-3 w-56"
+              style={{ left: Math.min(hover.x + 16, 9999), top: hover.y + 16 }}
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.15 }}
+            >
+              <p className="text-base font-semibold text-ink">{hover.c.name}</p>
+              <div className="flex items-center gap-2 mt-1.5">
+                <span className="num text-2xl font-medium tracking-[-0.03em]" style={{ color: riskColor(hover.c.risk_score) }}>
+                  {hover.c.risk_score}
+                </span>
+                <SeverityBadge severity={hover.c.risk_level} size="xs" />
+              </div>
+              <p className="text-xs text-text-3 mt-1.5">
+                <span className="num text-text-2">{hover.c.total_threats.toLocaleString()}</span> indicators · {hover.c.primary_attack}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      <CountryDetailPanel countryCode={selected} onClose={() => select(null)} />
+    </Card>
   );
 }

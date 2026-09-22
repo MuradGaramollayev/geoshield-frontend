@@ -1,60 +1,32 @@
-import { useState } from "react";
-import { Briefcase, ChevronRight } from "lucide-react";
-import Docs from "../Docs";
+import DocsView from "../../components/common/DocsView";
+import type { DocSection } from "../../components/common/docsContent";
+import { PageHeader } from "../../components/ui";
 
-const EXECUTIVE_FAQ = [
+const EXECUTIVE: DocSection[] = [
   {
-    q: "How should I present GeoShield data to the board?",
-    a: "Focus on the Global Risk Index trend, Top 10 Risk Countries, and Mean Response Time. Avoid raw indicator counts — frame findings as business risk, not technical detail.",
-  },
-  {
-    q: "What does the Global Risk Index actually measure?",
-    a: "A weighted average combining indicator frequency, severity, source corroboration, and threat trend across all monitored countries. It updates in real time from 9 live intelligence sources.",
-  },
-  {
-    q: "How is this different from a traditional SIEM dashboard?",
-    a: "GeoShield aggregates cross-source, cross-country intelligence into a single risk narrative — it's built for strategic decisions, not log triage. Operational detail lives in the Analyst Panel.",
+    title: "For security leadership",
+    items: [
+      {
+        q: "How should I present GeoShield data to the board?",
+        a: "Lead with the Global Risk Index and where it sits in its band, then the few countries driving it and your mean response time. Keep raw indicator counts as backup, and frame findings as business exposure rather than technical detail.",
+      },
+      {
+        q: "What does the Global Risk Index measure?",
+        a: "The average of all country risk scores, weighted by each country's indicator volume, so high-volume countries count for more. It moves when the underlying dataset is refreshed, not minute by minute.",
+      },
+      {
+        q: "How is this different from a SIEM dashboard?",
+        a: "A SIEM shows your own logs. GeoShield shows external, cross-source threat intelligence by country and vendor, for strategic prioritisation. Operational triage lives in the Analyst panel.",
+      },
+    ],
   },
 ];
 
 export default function EnterpriseDocs() {
-  const [openIdx, setOpenIdx] = useState<number | null>(0);
-
   return (
-    <div className="p-8 space-y-6 max-w-3xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100">Documentation</h1>
-        <p className="text-sm text-slate-500 mt-1">Guides for security leadership</p>
-      </div>
-
-      {/* Enterprise-only: Executive FAQ */}
-      <div className="card-glow overflow-hidden">
-        <div className="p-4 border-b border-slate-800 flex items-center gap-2">
-          <Briefcase size={15} className="text-sky-400" />
-          <h3 className="text-sm font-semibold text-slate-200">Executive FAQ</h3>
-        </div>
-        <div className="divide-y divide-slate-800">
-          {EXECUTIVE_FAQ.map((item, i) => (
-            <div key={i}>
-              <button
-                onClick={() => setOpenIdx(openIdx === i ? null : i)}
-                className="w-full flex items-center justify-between p-4 hover:bg-slate-800/40 transition-colors text-left"
-              >
-                <span className="text-sm font-medium text-slate-200">{item.q}</span>
-                <ChevronRight
-                  size={15}
-                  className={`text-slate-500 shrink-0 ml-3 transition-transform ${openIdx === i ? "rotate-90" : ""}`}
-                />
-              </button>
-              {openIdx === i && (
-                <p className="px-4 pb-4 text-xs text-slate-500 leading-relaxed">{item.a}</p>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <Docs />
+    <div className="max-w-4xl">
+      <PageHeader title="Documentation" description="Guides for security leadership, plus how the platform's numbers are produced." />
+      <DocsView extra={EXECUTIVE} />
     </div>
   );
 }

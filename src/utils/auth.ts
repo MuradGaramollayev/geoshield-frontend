@@ -60,3 +60,9 @@ export function isExecutiveRole(role: UserRole): boolean {
 export function panelPathForRole(role: UserRole): string {
   return isExecutiveRole(role) ? "/enterprise" : "/analyst";
 }
+export const ALL_ROLES: UserRole[] = [
+  "SOC Analyst", "SOC Manager", "Junior Analyst", "Security Researcher", "Penetration Tester", "Incident Responder",
+  "Student", "Security Enthusiast", "CISO", "CTO", "Security Director", "Risk & Compliance Manager", "GRC Analyst",
+  "IT Security Manager", "VP of Engineering",
+];
+

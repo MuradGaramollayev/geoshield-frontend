@@ -1,266 +1,317 @@
 import { useState } from "react";
-import { Search, ShieldCheck, ShieldAlert, Globe, Building2, Server, AlertTriangle } from "lucide-react";
+import { useAsync } from "../hooks/useAsync";
+import { useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
+import { Globe2, Radar, ScanSearch, Server, ShieldCheck, ShieldAlert, Bug } from "lucide-react";
 import { lookupIoc } from "../services/api";
 import type { IocLookupResult } from "../services/api";
+import { SEVERITY, toSeverity } from "../design/tokens";
+import { useMotion } from "../design/panel";
+import {
+  Badge, Button, Card, CardHeader, EmptyState, ErrorState, KeyValue, MethodologyNote, PageHeader, SeverityBadge, Skeleton,
+} from "../components/ui";
 
-const RISK_COLOR: Record<string, string> = {
-  CRITICAL: "#f43f5e",
-  HIGH: "#fb923c",
-  MEDIUM: "#fbbf24",
-  LOW: "#34d399",
-  UNKNOWN: "#94a3b8",
-};
+const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+const IPV6 = /^[0-9a-fA-F:]+$/;
 
-function Row({ label, value, valueClass = "text-slate-100" }: { label: string; value: React.ReactNode; valueClass?: string }) {
+function SourceCard({
+  icon,
+  title,
+  present,
+  emptyNote,
+  children,
+  delay,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  present: boolean;
+  emptyNote: string;
+  children?: React.ReactNode;
+  delay: number;
+}) {
+  const m = useMotion();
   return (
-    <div className="flex items-start justify-between gap-4 py-2">
-      <span className="text-[13px] text-slate-500 shrink-0">{label}</span>
-      <span className={`text-[13px] font-semibold text-right ${valueClass}`}>{value}</span>
-    </div>
-  );
-}
-
-function EmptySourceCard({ icon: Icon, iconColor, title, note }: { icon: any; iconColor: string; title: string; note: string }) {
-  return (
-    <div className="card-glow p-5 flex flex-col items-center justify-center text-center py-8">
-      <Icon size={22} className={iconColor} />
-      <h3 className="text-sm font-semibold text-slate-300 mt-2 mb-1">{title}</h3>
-      <p className="text-xs text-slate-600">{note}</p>
-    </div>
+    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: m.enter, delay, ease: m.ease }}>
+      <Card className="h-full">
+        <CardHeader title={title} icon={icon} actions={present ? <Badge tone="positive">Data returned</Badge> : <Badge>No data</Badge>} className="mb-2" />
+        {present ? <div className="divide-y divide-line">{children}</div> : <p className="text-sm text-text-3 py-3">{emptyNote}</p>}
+      </Card>
+    </motion.div>
   );
 }
 
 export default function IocExplorer() {
-  const [ip, setIp] = useState("");
-  const [result, setResult] = useState<IocLookupResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<string[]>([]);
+  // The IP being looked up lives in the URL (?ip=), so deep links and Ctrl K work.
+  const [params, setParams] = useSearchParams();
+  const query = params.get("ip");
+  const [ip, setIp] = useState(query ?? "");
+  const [inputError, setInputError] = useState<string | null>(null);
+  const [history, setHistory] = useState<string[]>(query ? [query] : []);
+  const lookup = useAsync<IocLookupResult | null>(() => (query ? lookupIoc(query) : Promise.resolve(null)), [query]);
+  const loading = !!query && lookup.loading;
+  const error = lookup.error;
+  const result = loading ? null : lookup.data;
 
-  const handleSearch = async (targetIp?: string) => {
-    const query = (targetIp ?? ip).trim();
-    if (!query) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await lookupIoc(query);
-      setResult(data);
-      setHistory((prev) => [query, ...prev.filter((h) => h !== query)].slice(0, 6));
-    } catch (err: any) {
-      setError(err.message);
-      setResult(null);
-    } finally {
-      setLoading(false);
+  const search = (target?: string) => {
+    const q = (target ?? ip).trim();
+    if (!q) return;
+    if (!IPV4.test(q) && !(q.includes(":") && IPV6.test(q))) {
+      setInputError("Enter a valid IPv4 or IPv6 address, e.g. 45.148.10.141");
+      return;
     }
+    setInputError(null);
+    setHistory((prev) => [q, ...prev.filter((h) => h !== q)].slice(0, 6));
+    if (q === query) lookup.reload();
+    else setParams({ ip: q }, { replace: true });
   };
 
-  const riskColor = result ? RISK_COLOR[result.risk_level] || RISK_COLOR.UNKNOWN : RISK_COLOR.UNKNOWN;
+  const sev = result ? toSeverity(result.risk_level) : null;
+  const tone = sev ? SEVERITY[sev] : null;
+  const vt = result?.virustotal;
+  const vtTotal = vt ? (vt.malicious ?? 0) + (vt.suspicious ?? 0) + (vt.harmless ?? 0) : 0;
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto overflow-x-hidden">
-      <div>
-        <h1 className="text-xl font-bold text-slate-100 mb-1">IOC Explorer</h1>
-        <p className="text-sm text-slate-500">
-          Real-time IP reputation lookup — AbuseIPDB, VirusTotal, Shodan, GreyNoise
-        </p>
-      </div>
+    <div className="max-w-6xl">
+      <PageHeader
+        title="IOC Lookup"
+        description="IP reputation across AbuseIPDB, VirusTotal, Shodan and GreyNoise, with a combined verdict."
+      />
 
-      {/* Search bar — flex layout, no absolute icon overlap */}
-      <div className="card-glow p-4">
-        <div className="flex items-center gap-2 bg-panel border border-gray-700 rounded-lg px-4 py-1 focus-within:border-emerald/50 focus-within:ring-1 focus-within:ring-emerald/30 transition-colors">
-          <Search className="text-slate-500 shrink-0" size={18} />
-          <input
-            type="text"
-            value={ip}
-            onChange={(e) => setIp(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder="Enter an IP address (e.g. 45.148.10.141)"
-            className="flex-1 bg-transparent border-none outline-none py-2.5 text-sm text-white placeholder-gray-500 min-w-0"
-          />
-          <button
-            onClick={() => handleSearch()}
-            disabled={loading}
-            className="shrink-0 bg-emerald text-navy font-semibold text-sm px-4 py-1.5 rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {loading ? "Searching..." : "Search"}
-          </button>
-        </div>
-
+      <Card className="mb-[var(--gap-grid)]">
+        <form
+          className="flex flex-col sm:flex-row gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            search();
+          }}
+        >
+          <div className={`field flex-1 ${inputError ? "shadow-[0_0_0_1px_var(--color-sev-critical)]" : ""}`}>
+            <ScanSearch size={17} className="text-text-3 shrink-0" />
+            <input
+              value={ip}
+              onChange={(e) => setIp(e.target.value)}
+              placeholder="Enter an IP address, e.g. 45.148.10.141"
+              aria-label="IP address"
+              aria-invalid={!!inputError}
+              className="code"
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </div>
+          <Button type="submit" variant="primary" loading={loading}>
+            Look up
+          </Button>
+        </form>
+        {inputError && <p className="text-sm text-sev-critical-text mt-2">{inputError}</p>}
         {history.length > 0 && (
           <div className="flex items-center gap-2 mt-3 flex-wrap">
-            <span className="text-xs text-slate-500">Recent searches:</span>
+            <span className="text-xs text-text-3">Recent</span>
             {history.map((h) => (
               <button
                 key={h}
-                onClick={() => { setIp(h); handleSearch(h); }}
-                className="text-xs font-mono text-slate-400 bg-slate-800 hover:bg-slate-700 rounded px-2 py-1 transition-colors"
+                onClick={() => {
+                  setIp(h);
+                  search(h);
+                }}
+                className="code text-xs text-ink bg-sunken hover:bg-well rounded-[8px] px-2 py-1 interactive"
               >
                 {h}
               </button>
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
-      {error && (
-        <div className="card-glow p-4 text-rose-400 text-sm">Error: {error}</div>
+      {error && <ErrorState message={error} onRetry={lookup.reload} className="mb-[var(--gap-grid)]" />}
+
+      {loading && (
+        <div className="grid md:grid-cols-2 gap-[var(--gap-grid)]">
+          <Skeleton className="h-36 rounded-[20px] md:col-span-2" />
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-52 rounded-[20px]" />
+          ))}
+        </div>
       )}
 
-      {result && (
-        <div className="space-y-4">
-          {/* Risk summary — full width */}
-          <div className="card-glow p-6 flex items-center gap-6">
-            <div className="relative w-24 h-24 shrink-0">
-              <svg width="96" height="96" viewBox="0 0 112 112">
-                <circle cx="56" cy="56" r="44" fill="none" stroke="rgba(148,163,184,0.1)" strokeWidth="8" />
-                <circle
-                  cx="56" cy="56" r="44" fill="none"
-                  stroke={riskColor} strokeWidth="8" strokeLinecap="round"
-                  strokeDasharray={2 * Math.PI * 44}
-                  strokeDashoffset={0}
-                  transform="rotate(-90 56 56)"
-                  style={{ filter: `drop-shadow(0 0 6px ${riskColor}88)` }}
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                {result.risk_level === "LOW" || result.risk_level === "UNKNOWN" ? (
-                  <ShieldCheck size={30} style={{ color: riskColor }} />
-                ) : (
-                  <ShieldAlert size={30} style={{ color: riskColor }} />
-                )}
-              </div>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-mono text-lg text-slate-100 mb-2">{result.ip}</p>
+      {!loading && result && (
+        <div className="space-y-[var(--gap-grid)]">
+          <Card className="relative overflow-hidden">
+            {tone && <span className="absolute inset-y-0 left-0 w-1.5" style={{ background: tone.solid }} aria-hidden="true" />}
+            <div className="flex flex-wrap items-center gap-5 pl-2">
               <span
-                className="inline-block text-sm font-bold px-3 py-1 rounded-full mb-2"
-                style={{ color: riskColor, background: `${riskColor}1a` }}
+                className="w-14 h-14 rounded-[16px] inline-flex items-center justify-center shrink-0"
+                style={{ background: tone?.tint ?? "var(--color-sunken)", color: tone?.text ?? "var(--color-text-2)" }}
               >
-                {result.risk_level}
+                {sev === "LOW" || !sev ? <ShieldCheck size={26} /> : <ShieldAlert size={26} />}
               </span>
-              <p className="text-sm text-slate-400">{result.recommendation}</p>
+              <div className="flex-1 min-w-[240px]">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span className="code text-xl font-semibold text-ink">{result.ip}</span>
+                  {sev ? <SeverityBadge severity={sev} /> : <Badge>Unknown</Badge>}
+                  {result.mode === "online" ? (
+                    <Badge tone="positive">Live vendor lookup</Badge>
+                  ) : (
+                    <span title="Served from the backend's offline cache, not a live vendor response.">
+                      <Badge tone="caution">Offline cache</Badge>
+                    </span>
+                  )}
+                </div>
+                <p className="text-base text-text-2">{result.message ?? result.recommendation}</p>
+              </div>
             </div>
-          </div>
+          </Card>
 
-          {/* Source cards — 2 columns, generous spacing */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* AbuseIPDB */}
-            {result.abuseipdb?.score !== undefined ? (
-              <div className="card-glow p-5">
-                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-800">
-                  <Globe size={16} className="text-sky-400" />
-                  <h3 className="text-sm font-semibold text-slate-200">AbuseIPDB</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-[var(--gap-grid)]">
+            <SourceCard
+              icon={<Globe2 size={17} />}
+              title="AbuseIPDB"
+              present={result.abuseipdb?.score !== undefined}
+              emptyNote="No report returned. The IP may be unreported, or the API rate limit was hit."
+              delay={0}
+            >
+              <KeyValue
+                label="Abuse confidence"
+                value={
+                  <span style={{ color: (result.abuseipdb.score ?? 0) >= 50 ? SEVERITY.CRITICAL.text : undefined }}>
+                    {result.abuseipdb.score}%
+                  </span>
+                }
+              />
+              <KeyValue label="Country" value={result.abuseipdb.country || "—"} />
+              <KeyValue label="ISP" value={result.abuseipdb.isp || "—"} />
+              <KeyValue label="Usage type" value={result.abuseipdb.usageType || "—"} />
+              <KeyValue label="Total reports" value={result.abuseipdb.totalReports?.toLocaleString() ?? "—"} />
+              {!!result.abuseipdb.categories?.length && (
+                <div className="flex flex-wrap gap-1.5 pt-3">
+                  {result.abuseipdb.categories.map((c) => (
+                    <Badge key={c}>{c}</Badge>
+                  ))}
                 </div>
-                <div className="divide-y divide-slate-800/60">
-                  <Row label="Confidence Score" value={`${result.abuseipdb.score}%`} valueClass="text-rose-400" />
-                  <Row label="Country" value={result.abuseipdb.country || "—"} />
-                  <Row label="ISP" value={result.abuseipdb.isp || "—"} />
-                  <Row label="Total Reports" value={result.abuseipdb.totalReports ?? "—"} />
-                  {result.abuseipdb.categories && result.abuseipdb.categories.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pt-3">
-                      {result.abuseipdb.categories.map((cat) => (
-                        <span key={cat} className="text-xs bg-slate-800 text-slate-300 rounded px-2 py-1">
-                          {cat}
+              )}
+            </SourceCard>
+
+            <SourceCard
+              icon={<Bug size={17} />}
+              title="VirusTotal"
+              present={vt?.malicious !== undefined}
+              emptyNote="No analysis returned. The IP may be unscanned, or the API rate limit was hit."
+              delay={0.04}
+            >
+              {vtTotal > 0 && (
+                <div className="py-3">
+                  <div className="flex h-2.5 rounded-full overflow-hidden bg-sunken">
+                    <span style={{ width: `${((vt?.malicious ?? 0) / vtTotal) * 100}%`, background: SEVERITY.CRITICAL.solid }} />
+                    <span style={{ width: `${((vt?.suspicious ?? 0) / vtTotal) * 100}%`, background: SEVERITY.MEDIUM.solid }} />
+                    <span style={{ width: `${((vt?.harmless ?? 0) / vtTotal) * 100}%`, background: SEVERITY.LOW.solid }} />
+                  </div>
+                  <p className="text-xs text-text-3 mt-1.5">
+                    <span className="num text-ink font-semibold">{vt?.malicious}</span> of <span className="num">{vtTotal}</span> engines flag this IP as malicious
+                  </p>
+                </div>
+              )}
+              <KeyValue label="Malicious" value={vt?.malicious ?? "—"} />
+              <KeyValue label="Suspicious" value={vt?.suspicious ?? "—"} />
+              <KeyValue label="Harmless" value={vt?.harmless ?? "—"} />
+              <KeyValue label="Reputation" value={vt?.reputation ?? "—"} />
+              <KeyValue label="AS owner" value={vt?.as_owner || "—"} />
+              {vt?.network && <KeyValue label="Network" value={vt.network} mono />}
+            </SourceCard>
+
+            <SourceCard
+              icon={<Server size={17} />}
+              title="Shodan"
+              present={!!result.shodan}
+              emptyNote="This IP isn't in the Shodan enrichment set."
+              delay={0.08}
+            >
+              {result.shodan && (
+                <>
+                  <KeyValue label="Location" value={[result.shodan.city, result.shodan.country].filter(Boolean).join(", ") || "—"} />
+                  <KeyValue label="Organisation" value={result.shodan.org || "—"} />
+                  {result.shodan.os && <KeyValue label="OS" value={result.shodan.os} />}
+                  <KeyValue label="Open ports" value={result.shodan.port_count ?? "—"} />
+                  {!!result.shodan.ports?.length && (
+                    <div className="flex flex-wrap gap-1.5 py-2.5">
+                      {result.shodan.ports.slice(0, 12).map((p) => (
+                        <span key={p} className="code text-xs bg-sunken text-ink rounded-[6px] px-1.5 py-0.5">
+                          {p}
                         </span>
                       ))}
                     </div>
                   )}
-                </div>
-              </div>
-            ) : (
-              <EmptySourceCard
-                icon={Globe} iconColor="text-sky-400/50"
-                title="AbuseIPDB"
-                note="No data — rate limit reached or IP not reported"
-              />
-            )}
-
-            {/* VirusTotal */}
-            {result.virustotal?.malicious !== undefined ? (
-              <div className="card-glow p-5">
-                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-800">
-                  <AlertTriangle size={16} className="text-amber-400" />
-                  <h3 className="text-sm font-semibold text-slate-200">VirusTotal</h3>
-                </div>
-                <div className="divide-y divide-slate-800/60">
-                  <Row label="Malicious" value={result.virustotal.malicious} valueClass="text-rose-400" />
-                  <Row label="Suspicious" value={result.virustotal.suspicious} valueClass="text-amber-400" />
-                  <Row label="Harmless" value={result.virustotal.harmless} valueClass="text-emerald-400" />
-                  <Row label="Reputation" value={result.virustotal.reputation ?? "—"} />
-                  <Row label="AS Owner" value={result.virustotal.as_owner || "—"} />
-                </div>
-              </div>
-            ) : (
-              <EmptySourceCard
-                icon={AlertTriangle} iconColor="text-amber-400/50"
-                title="VirusTotal"
-                note="No data — rate limit reached or IP not scanned"
-              />
-            )}
-
-            {/* Shodan */}
-            {result.shodan ? (
-              <div className="card-glow p-5">
-                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-800">
-                  <Server size={16} className="text-violet-400" />
-                  <h3 className="text-sm font-semibold text-slate-200">Shodan</h3>
-                </div>
-                <div className="divide-y divide-slate-800/60">
-                  <Row label="City / Country" value={`${result.shodan.city}, ${result.shodan.country}`} />
-                  <Row label="Organization" value={result.shodan.org || "—"} />
-                  <Row label="Open Ports" value={result.shodan.port_count} />
-                  <Row
-                    label="Vulnerabilities (CVE)"
-                    value={result.shodan.vuln_count}
-                    valueClass={result.shodan.vuln_count! > 0 ? "text-rose-400" : "text-slate-100"}
+                  <KeyValue
+                    label="Exposed CVEs"
+                    value={
+                      <span style={{ color: (result.shodan.vuln_count ?? 0) > 0 ? SEVERITY.CRITICAL.text : undefined }}>
+                        {result.shodan.vuln_count ?? 0}
+                      </span>
+                    }
                   />
-                  {result.shodan.cves && result.shodan.cves.length > 0 && (
+                  {!!result.shodan.cves?.length && (
                     <div className="flex flex-wrap gap-1.5 pt-3">
-                      {result.shodan.cves.slice(0, 5).map((cve) => (
-                        <span key={cve} className="text-xs font-mono bg-rose-500/10 text-rose-400 rounded px-2 py-1">
-                          {cve}
-                        </span>
+                      {result.shodan.cves.slice(0, 8).map((c) => (
+                        <a
+                          key={c}
+                          href={`https://nvd.nist.gov/vuln/detail/${c}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="code text-xs rounded-[6px] px-1.5 py-0.5 hover:underline"
+                          style={{ background: SEVERITY.CRITICAL.tint, color: SEVERITY.CRITICAL.text }}
+                        >
+                          {c}
+                        </a>
                       ))}
                     </div>
                   )}
-                </div>
-              </div>
-            ) : (
-              <EmptySourceCard
-                icon={Server} iconColor="text-violet-400/50"
-                title="Shodan"
-                note="No exposed services found for this IP"
-              />
-            )}
+                </>
+              )}
+            </SourceCard>
 
-            {/* GreyNoise */}
-            {result.greynoise ? (
-              <div className="card-glow p-5">
-                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-800">
-                  <Building2 size={16} className="text-cyan-400" />
-                  <h3 className="text-sm font-semibold text-slate-200">GreyNoise</h3>
-                </div>
-                <div className="divide-y divide-slate-800/60">
-                  <Row label="Classification" value={result.greynoise.classification || "—"} valueClass="text-slate-100 capitalize" />
-                  <Row label="Name" value={result.greynoise.name || "—"} />
-                  <Row label="Noise" value={result.greynoise.noise ? "Yes" : "No"} />
-                </div>
-              </div>
-            ) : (
-              <EmptySourceCard
-                icon={Building2} iconColor="text-cyan-400/50"
-                title="GreyNoise"
-                note="No classification available for this IP"
-              />
-            )}
+            <SourceCard
+              icon={<Radar size={17} />}
+              title="GreyNoise"
+              present={!!result.greynoise}
+              emptyNote="This IP isn't in the GreyNoise enrichment set."
+              delay={0.12}
+            >
+              {result.greynoise && (
+                <>
+                  <KeyValue label="Classification" value={<span className="capitalize">{result.greynoise.classification || "—"}</span>} />
+                  <KeyValue label="Actor" value={result.greynoise.name || "—"} />
+                  <KeyValue label="Internet noise" value={result.greynoise.noise ? "Yes" : "No"} />
+                  <KeyValue label="Known benign (RIOT)" value={result.greynoise.riot ? "Yes" : "No"} />
+                  {result.greynoise.last_seen && <KeyValue label="Last seen" value={result.greynoise.last_seen} mono />}
+                </>
+              )}
+            </SourceCard>
           </div>
+
+          <MethodologyNote>
+            <p>
+              The verdict starts from AbuseIPDB confidence and VirusTotal malicious-engine count:
+              score = max(abuse confidence, malicious engines × 6). Critical at score ≥ 80 or ≥ 10 engines, High at ≥ 50
+              or ≥ 4, Medium at ≥ 20 or ≥ 1, otherwise Low.
+            </p>
+            <p>
+              Shodan and GreyNoise can only raise the verdict: a GreyNoise “malicious” classification lifts it to at least
+              High, “suspicious” to at least Medium, 1–9 exposed CVEs to at least High, and 10+ exposed CVEs to Critical.
+            </p>
+            <p>
+              <strong className="text-ink">Live vendor lookup</strong> means the backend queried AbuseIPDB and VirusTotal
+              just now. <strong className="text-ink">Offline cache</strong> means it answered from its local cache instead.
+            </p>
+          </MethodologyNote>
         </div>
       )}
 
-      {!result && !error && !loading && (
-        <div className="card-glow p-12 text-center text-slate-500 text-sm">
-          Search an IP address to get real-time threat intelligence
-        </div>
+      {!loading && !result && !error && (
+        <Card>
+          <EmptyState
+            icon={<ScanSearch size={20} />}
+            title="Look up an IP to see its reputation"
+            description="Paste any IPv4 or IPv6 address. Ctrl K also jumps here with an IP."
+          />
+        </Card>
       )}
     </div>
   );

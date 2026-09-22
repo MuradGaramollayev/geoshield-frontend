@@ -1,4 +1,22 @@
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+export const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+// Short-lived in-memory cache for read-only GETs that several components
+// request on the same screen (status, countries, timeline, MITRE matrix).
+// Mutating endpoints are never cached.
+const GET_TTL_MS = 60_000;
+const getCache = new Map<string, { at: number; promise: Promise<unknown> }>();
+
+async function cachedGet<T>(path: string, ttl = GET_TTL_MS): Promise<T> {
+  const hit = getCache.get(path);
+  if (hit && Date.now() - hit.at < ttl) return hit.promise as Promise<T>;
+  const promise = fetch(`${BASE_URL}${path}`).then((res) => {
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    return res.json() as Promise<T>;
+  });
+  getCache.set(path, { at: Date.now(), promise });
+  promise.catch(() => getCache.delete(path));
+  return promise;
+}
 
 export interface StatusData {
   mode: string;
@@ -12,6 +30,8 @@ export interface StatusData {
     high: number;
     sources: number;
   };
+  /** Reference date of the aggregated dataset (YYYY-MM-DD). */
+  as_of?: string;
 }
 
 export interface TimelineEvent {
@@ -30,26 +50,30 @@ export interface TimelineData {
   days: number;
   count: number;
   events: TimelineEvent[];
+  /** Reference date the backend measures the window from (YYYY-MM-DD). */
+  as_of?: string;
 }
 
 export async function fetchStatus(): Promise<StatusData> {
-  const res = await fetch(`${BASE_URL}/api/status`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  return cachedGet<StatusData>("/api/status");
 }
 
 export async function fetchTimeline(days: number = 14): Promise<TimelineData> {
-  const res = await fetch(`${BASE_URL}/api/timeline?days=${days}`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  return cachedGet<TimelineData>(`/api/timeline?days=${days}`);
 }
 
-// Hadisələri günə görə qruplaşdırıb sparkline üçün array qaytarır
+/**
+ * Buckets events per day into a fixed-length series (oldest first).
+ * `anchor` is the dataset's as-of date from the API; the window counts back
+ * from it rather than from the browser clock, so a static dataset never
+ * renders as an empty series.
+ */
 export function buildSparkline(
   events: TimelineEvent[],
   days: number,
-  filterFn?: (e: TimelineEvent) => boolean
-): { value: number }[] {
+  filterFn?: (e: TimelineEvent) => boolean,
+  anchor?: string
+): { date: string; value: number }[] {
   const filtered = filterFn ? events.filter(filterFn) : events;
   const counts: Record<string, number> = {};
 
@@ -57,15 +81,22 @@ export function buildSparkline(
     counts[e.date] = (counts[e.date] || 0) + 1;
   }
 
-  const today = new Date();
-  const result: { value: number }[] = [];
+  const end = anchor ? new Date(`${anchor}T00:00:00Z`) : new Date();
+  const result: { date: string; value: number }[] = [];
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
+    const d = new Date(end);
+    d.setUTCDate(d.getUTCDate() - i);
     const key = d.toISOString().split("T")[0];
-    result.push({ value: counts[key] || 0 });
+    result.push({ date: key, value: counts[key] || 0 });
   }
   return result;
+}
+
+/** "14 Jul 2026" style label for an as-of date. */
+export function formatAsOf(asOf?: string): string {
+  if (!asOf) return "";
+  const d = new Date(`${asOf}T00:00:00Z`);
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
 export interface CountryRisk {
   code: string;
@@ -83,9 +114,7 @@ export interface CountriesData {
 }
 
 export async function fetchCountries(): Promise<CountriesData> {
-  const res = await fetch(`${BASE_URL}/api/countries`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  return cachedGet<CountriesData>("/api/countries");
 }
 export interface CountryDetail {
   code: string;
@@ -185,16 +214,14 @@ export interface MitreMatrix {
 }
 
 export async function fetchMitreMatrix(): Promise<MitreMatrix> {
-  const res = await fetch(`${BASE_URL}/api/mitre/matrix`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  return cachedGet<MitreMatrix>("/api/mitre/matrix");
 }
 
 export interface MitreTechniqueDetail {
   id: string;
   name: string;
   description?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export async function fetchMitreTechnique(id: string): Promise<MitreTechniqueDetail> {
@@ -241,9 +268,27 @@ export async function fetchIncidents(): Promise<IncidentsData> {
   return res.json();
 }
 
+export async function createIncident(body: {
+  title: string;
+  severity: Incident["severity"];
+  source_ip?: string | null;
+  source_country?: string | null;
+  attack_type?: string | null;
+  assignee?: string;
+  evidence?: string[];
+}): Promise<Incident> {
+  const res = await fetch(`${BASE_URL}/api/incidents`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
 export async function updateIncident(
   id: string,
-  updates: Partial<Pick<Incident, "status" | "assignee" | "resolution">>
+  updates: Partial<Pick<Incident, "status" | "assignee" | "resolution">> & { note?: string }
 ): Promise<Incident> {
   const res = await fetch(`${BASE_URL}/api/incidents/${id}`, {
     method: "PUT",
@@ -401,8 +446,8 @@ export interface HeatmapCell {
   count: number;
 }
 
-export function buildHeatmapData(events: TimelineEvent[], weeks: number = 4): HeatmapCell[] {
-  const today = new Date();
+export function buildHeatmapData(events: TimelineEvent[], weeks: number = 4, anchor?: string): HeatmapCell[] {
+  const today = anchor ? new Date(`${anchor}T23:59:59Z`) : new Date();
   const cells: HeatmapCell[] = [];
   for (let w = 0; w < weeks; w++) {
     for (let d = 0; d < 7; d++) cells.push({ week: w, day: d, count: 0 });
@@ -415,7 +460,7 @@ export function buildHeatmapData(events: TimelineEvent[], weeks: number = 4): He
     const diffDays = Math.floor((today.getTime() - eventDate.getTime()) / 86400000);
     const week = Math.floor(diffDays / 7);
     if (week < 0 || week >= weeks) continue;
-    const day = eventDate.getDay();
+    const day = eventDate.getUTCDay(); // dates are UTC "YYYY-MM-DD"
     cells[cellIndex(week, day)].count += 1;
   }
   return cells;
@@ -427,8 +472,8 @@ export interface RadarCategory {
   lastWeek: number;
 }
 
-export function buildRadarData(events: TimelineEvent[]): RadarCategory[] {
-  const today = new Date();
+export function buildRadarData(events: TimelineEvent[], anchor?: string): RadarCategory[] {
+  const today = anchor ? new Date(`${anchor}T23:59:59Z`) : new Date();
   const oneWeekAgo = new Date(today.getTime() - 7 * 86400000);
   const twoWeeksAgo = new Date(today.getTime() - 14 * 86400000);
 

@@ -1,114 +1,57 @@
-import { useEffect, useState } from "react";
-import RiskBanner from "../components/common/RiskBanner";
-import MetricCard from "../components/common/MetricCard";
+import { AlertTriangle, Bug, Radio, Skull } from "lucide-react";
+import { buildSparkline, fetchStatus, fetchTimeline, formatAsOf } from "../services/api";
+import { useAsync } from "../hooks/useAsync";
+import { SEVERITY, color as C } from "../design/tokens";
+import RiskIndexCard from "../components/common/RiskIndexCard";
+import RiskScoreNote from "../components/common/RiskScoreNote";
 import WorldMap from "../components/charts/WorldMap";
-import {
-  fetchStatus,
-  fetchTimeline,
-  buildSparkline,
-} from "../services/api";
-import type { StatusData, TimelineEvent } from "../services/api";
-import { ShieldAlert, Globe, AlertTriangle, Radar } from "lucide-react";
+import { ErrorState, PageHeader, Skeleton, SkeletonCard, Sparkline, StatTile } from "../components/ui";
 
-function riskLevel(score: number): "LOW" | "MODERATE" | "ELEVATED" | "HIGH" | "CRITICAL" {
-  if (score < 20) return "LOW";
-  if (score < 40) return "MODERATE";
-  if (score < 60) return "ELEVATED";
-  if (score < 80) return "HIGH";
-  return "CRITICAL";
-}
-
-const SPARKLINE_DAYS = 14;
+const DAYS = 14;
 
 export default function Dashboard() {
-  const [status, setStatus] = useState<StatusData | null>(null);
-  const [events, setEvents] = useState<TimelineEvent[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, loading, reload } = useAsync(() => Promise.all([fetchStatus(), fetchTimeline(DAYS)]), []);
+  const [status, tl] = data ?? [null, null];
+  const ev = tl?.events ?? [];
+  const asOf = tl?.as_of;
+  const window = asOf ? `${DAYS} days to ${formatAsOf(asOf)}` : `${DAYS} days`;
 
-  useEffect(() => {
-    Promise.all([fetchStatus(), fetchTimeline(SPARKLINE_DAYS)])
-      .then(([statusRes, timelineRes]) => {
-        setStatus(statusRes);
-        setEvents(timelineRes.events);
-      })
-      .catch((err) => setError(err.message));
-  }, []);
+  const tiles = [
+    { label: "Timeline events", icon: <AlertTriangle size={16} />, f: () => true, color: C.ink2 },
+    { label: "CVE exploits", icon: <Bug size={16} />, f: (e: { type: string }) => e.type === "CVE_EXPLOIT", color: C.accent },
+    { label: "C2 servers", icon: <Radio size={16} />, f: (e: { type: string }) => e.type === "C2_DETECTED", color: SEVERITY.HIGH.solid },
+    { label: "Critical events", icon: <Skull size={16} />, f: (e: { severity: string }) => e.severity === "CRITICAL", color: SEVERITY.CRITICAL.solid },
+  ];
 
-  if (error) {
-    return (
-      <div className="p-6 text-rose-400">
-        Could not connect to backend: {error}
-        <br />
-        <span className="text-slate-500 text-sm">
-          Make sure `python start.py` is running (http://localhost:8000)
-        </span>
-      </div>
-    );
-  }
-
-  if (!status) {
-    return <div className="p-6 text-slate-400">Loading...</div>;
-  }
-
-  const { countries, total_threats, avg_risk, critical, high, sources } = status.data;
-
-  const allSparkline = buildSparkline(events, SPARKLINE_DAYS);
-  const criticalSparkline = buildSparkline(
-    events, SPARKLINE_DAYS, (e) => e.severity === "CRITICAL"
-  );
-  const highSparkline = buildSparkline(
-    events, SPARKLINE_DAYS, (e) => e.severity === "HIGH"
-  );
+  if (error) return <ErrorState message={error} onRetry={reload} />;
 
   return (
-    <div className="p-6 space-y-6">
-      <RiskBanner
-        score={avg_risk}
-        level={riskLevel(avg_risk)}
-        topCountry={`${countries} countries monitored`}
-        activeIndicators={total_threats}
-      />
+    <div className="space-y-[var(--gap-grid)]">
+      <PageHeader title="Threat overview" description="Global risk posture, recent activity and the country map, from the current dataset." />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          label="Active Threat Indicators"
-          value={total_threats.toLocaleString()}
-          icon={ShieldAlert}
-          trendLabel={`from ${sources} sources`}
-          sparklineData={allSparkline}
-          accentColor="#38bdf8"
-          delay={0.1}
-        />
-        <MetricCard
-          label="Countries Monitored"
-          value={countries}
-          icon={Globe}
-          trendLabel="global coverage"
-          sparklineData={allSparkline}
-          accentColor="#34d399"
-          delay={0.15}
-        />
-        <MetricCard
-          label="Critical Events"
-          value={critical}
-          icon={AlertTriangle}
-          trendLabel={`last ${SPARKLINE_DAYS} days`}
-          sparklineData={criticalSparkline}
-          accentColor="#f43f5e"
-          delay={0.2}
-        />
-        <MetricCard
-          label="High Risk Events"
-          value={high}
-          icon={Radar}
-          trendLabel={`last ${SPARKLINE_DAYS} days`}
-          sparklineData={highSparkline}
-          accentColor="#fbbf24"
-          delay={0.25}
-        />
+      {loading || !status ? <Skeleton className="h-40 rounded-[20px]" /> : <RiskIndexCard status={status} />}
+
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-[var(--gap-grid)]">
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} lines={1} />)
+          : tiles.map((t, i) => {
+              const series = buildSparkline(ev, DAYS, t.f, asOf);
+              return (
+                <StatTile
+                  key={t.label}
+                  icon={t.icon}
+                  label={t.label}
+                  value={series.reduce((s, d) => s + d.value, 0)}
+                  spark={<Sparkline id={`dash-${i}`} data={series} stroke={t.color} height={36} />}
+                  footer={window}
+                  delay={i * 0.03}
+                />
+              );
+            })}
       </div>
 
       <WorldMap />
+      <RiskScoreNote />
     </div>
   );
 }

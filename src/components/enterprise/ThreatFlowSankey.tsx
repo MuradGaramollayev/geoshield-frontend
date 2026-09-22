@@ -1,165 +1,118 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { motion } from "framer-motion";
 import { fetchCountries } from "../../services/api";
-import type { CountryRisk } from "../../services/api";
+import { useAsync } from "../../hooks/useAsync";
+import { SEVERITY, SEVERITY_ORDER, toSeverity, color as C } from "../../design/tokens";
+import { Card, CardHeader, ErrorState, SkeletonCard } from "../ui";
 
-const RISK_COLOR: Record<string, string> = {
-  CRITICAL: "#f43f5e",
-  HIGH: "#fb923c",
-  MEDIUM: "#fbbf24",
-  LOW: "#34d399",
-};
+const TOP_N = 10;
+const NODE_H = 34;
+const GAP = 10;
+const COL_W = 190;
+const LINK_W = 110;
 
-const ATTACK_COLOR: Record<string, string> = {
-  "Malware C2": "#f43f5e",
-  "Phishing": "#fb923c",
-  "BruteForce": "#fbbf24",
-  "DDoS": "#38bdf8",
-  "Botnet": "#a78bfa",
-  "Port Scan": "#34d399",
-  "Spam": "#94a3b8",
-};
-
+/**
+ * Country → labelled primary vector → severity band for the top-risk countries.
+ * Every link is one country; vector→severity links are counted per country
+ * (not inferred from the first country in a group).
+ */
 export default function ThreatFlowSankey() {
-  const [countries, setCountries] = useState<CountryRisk[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [hoveredFlow, setHoveredFlow] = useState<string | null>(null);
+  const { data, error, loading, reload } = useAsync(fetchCountries, []);
+  const [hover, setHover] = useState<string | null>(null);
+  if (loading) return <SkeletonCard tall />;
+  if (error) return <ErrorState message={error} onRetry={reload} />;
 
-  useEffect(() => {
-    fetchCountries()
-      .then((data) => setCountries(data.countries))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+  const top = [...data!.countries].sort((a, b) => b.risk_score - a.risk_score).slice(0, TOP_N);
+  const vectors = Array.from(new Set(top.map((c) => c.primary_attack)));
+  const levels = SEVERITY_ORDER.filter((s) => top.some((c) => c.risk_level === s));
+  const rows = Math.max(top.length, vectors.length, levels.length);
+  const H = rows * (NODE_H + GAP);
+  const yOf = (i: number, n: number) => i * (NODE_H + GAP) + (H - n * (NODE_H + GAP)) / 2 + NODE_H / 2;
+  const x1 = COL_W, x2 = COL_W + LINK_W, x3 = x2 + COL_W, x4 = x3 + LINK_W;
+  const W = x4 + COL_W;
 
-  if (loading) return <div className="card-glow p-6 text-slate-500 text-sm">Loading flow diagram...</div>;
-  if (error) return <div className="card-glow p-6 text-rose-400 text-sm">Error: {error}</div>;
+  const vecToLevel = new Map<string, number>();
+  top.forEach((c) => {
+    const k = `${c.primary_attack}|${c.risk_level}`;
+    vecToLevel.set(k, (vecToLevel.get(k) ?? 0) + 1);
+  });
 
-  const top8 = [...countries].sort((a, b) => b.risk_score - a.risk_score).slice(0, 8);
-  const attackTypes = Array.from(new Set(top8.map((c) => c.primary_attack)));
-  const riskLevels = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
-
-  const nodeHeight = 32;
-  const nodeGap = 10;
-  const colWidth = 180;
-  const svgHeight = Math.max(top8.length, attackTypes.length, riskLevels.length) * (nodeHeight + nodeGap);
-
-  const countryY = (i: number) => i * (nodeHeight + nodeGap);
-  const attackY = (i: number) => i * (nodeHeight + nodeGap) + (svgHeight - attackTypes.length * (nodeHeight + nodeGap)) / 2;
-  const riskY = (i: number) => i * (nodeHeight + nodeGap) + (svgHeight - riskLevels.length * (nodeHeight + nodeGap)) / 2;
-
-  const col1X = 0;
-  const col2X = colWidth + 60;
-  const col3X = (colWidth + 60) * 2;
+  const curve = (xa: number, ya: number, xb: number, yb: number) => `M ${xa} ${ya} C ${xa + LINK_W / 2} ${ya}, ${xb - LINK_W / 2} ${yb}, ${xb} ${yb}`;
+  const dim = (id: string, related: string[]) => (hover && hover !== id && !related.includes(hover) ? 0.12 : 0.55);
 
   return (
-    <div className="card-glow p-6">
-      <div className="mb-5">
-        <h3 className="text-sm font-semibold text-slate-200">Threat Flow: Country → Vector → Severity</h3>
-        <p className="text-xs text-slate-500 mt-0.5">Top 8 risk countries, real attack vectors and severity mapping</p>
-      </div>
-
+    <Card>
+      <CardHeader
+        title="How the highest-risk countries map to threat type and severity"
+        description={`Top ${TOP_N} countries by risk score. Threat type is the primary attack labelled in the dataset.`}
+      />
       <div className="overflow-x-auto">
-        <svg width={col3X + colWidth} height={svgHeight + 20} className="mx-auto">
-          {/* Flow lines: country -> attack type */}
-          {top8.map((c, i) => {
-            const attackIdx = attackTypes.indexOf(c.primary_attack);
-            const flowId = `c-${c.code}`;
-            const y1 = countryY(i) + nodeHeight / 2;
-            const y2 = attackY(attackIdx) + nodeHeight / 2;
-            const color = ATTACK_COLOR[c.primary_attack] || "#38bdf8";
-            const isHovered = hoveredFlow === flowId;
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[720px]" style={{ height: H }} role="img" aria-label="Country to threat type to severity flow">
+          {top.map((c, i) => {
+            const vi = vectors.indexOf(c.primary_attack);
+            const sev = toSeverity(c.risk_level) ?? "LOW";
             return (
-              <path
-                key={flowId}
-                d={`M ${col1X + colWidth} ${y1} C ${col1X + colWidth + 60} ${y1}, ${col2X - 60} ${y2}, ${col2X} ${y2}`}
-                stroke={color}
-                strokeWidth={isHovered ? 4 : 2}
+              <motion.path
+                key={`cv-${c.code}`}
+                d={curve(x1, yOf(i, top.length), x2, yOf(vi, vectors.length))}
+                stroke={SEVERITY[sev].solid}
+                strokeWidth={hover === c.code ? 5 : 3}
                 fill="none"
-                opacity={isHovered ? 0.9 : 0.35}
-                onMouseEnter={() => setHoveredFlow(flowId)}
-                onMouseLeave={() => setHoveredFlow(null)}
-                style={{ cursor: "pointer", transition: "all 0.15s" }}
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1, opacity: dim(c.code, [`v-${c.primary_attack}`]) }}
+                transition={{ duration: 0.8, delay: i * 0.04 }}
+              />
+            );
+          })}
+          {Array.from(vecToLevel.entries()).map(([k, n]) => {
+            const [v, l] = k.split("|");
+            const sev = toSeverity(l) ?? "LOW";
+            return (
+              <motion.path
+                key={`vl-${k}`}
+                d={curve(x3, yOf(vectors.indexOf(v), vectors.length), x4, yOf(levels.indexOf(sev), levels.length))}
+                stroke={SEVERITY[sev].solid}
+                strokeWidth={2 + n * 2}
+                fill="none"
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1, opacity: dim(`v-${v}`, top.filter((c) => c.primary_attack === v && c.risk_level === l).map((c) => c.code)) }}
+                transition={{ duration: 0.8, delay: 0.3 }}
               />
             );
           })}
 
-          {/* Flow lines: attack type -> risk level */}
-          {attackTypes.map((attack, ai) => {
-            const relatedCountries = top8.filter((c) => c.primary_attack === attack);
-            const dominantLevel = relatedCountries[0]?.risk_level || "MEDIUM";
-            const riskIdx = riskLevels.indexOf(dominantLevel);
-            const flowId = `a-${attack}`;
-            const y1 = attackY(ai) + nodeHeight / 2;
-            const y2 = riskY(riskIdx) + nodeHeight / 2;
-            const color = RISK_COLOR[dominantLevel];
-            const isHovered = hoveredFlow === flowId;
+          {top.map((c, i) => {
+            const y = yOf(i, top.length) - NODE_H / 2;
             return (
-              <path
-                key={flowId}
-                d={`M ${col2X + colWidth} ${y1} C ${col2X + colWidth + 60} ${y1}, ${col3X - 60} ${y2}, ${col3X} ${y2}`}
-                stroke={color}
-                strokeWidth={isHovered ? 4 : 2}
-                fill="none"
-                opacity={isHovered ? 0.9 : 0.35}
-                onMouseEnter={() => setHoveredFlow(flowId)}
-                onMouseLeave={() => setHoveredFlow(null)}
-                style={{ cursor: "pointer", transition: "all 0.15s" }}
-              />
+              <g key={c.code} onMouseEnter={() => setHover(c.code)} onMouseLeave={() => setHover(null)} className="cursor-default">
+                <rect x={0} y={y} width={COL_W} height={NODE_H} rx={10} fill={C.paper} stroke={C.line} />
+                <text x={12} y={y + NODE_H / 2 + 4} fontSize={13} fontWeight={600} fill={C.ink}>{c.name}</text>
+                <text x={COL_W - 12} y={y + NODE_H / 2 + 4} fontSize={12} textAnchor="end" fill={C.text2} className="num">{c.risk_score}</text>
+              </g>
             );
           })}
-
-          {/* Column 1: Countries */}
-          {top8.map((c, i) => (
-            <g key={c.code}>
-              <rect
-                x={col1X} y={countryY(i)} width={colWidth} height={nodeHeight}
-                rx={6} fill="#1e293b" stroke={RISK_COLOR[c.risk_level]} strokeWidth={1.5}
-              />
-              <text x={col1X + 10} y={countryY(i) + nodeHeight / 2 + 4} fill="#e2e8f0" fontSize={12} fontWeight={600}>
-                {c.name}
-              </text>
-              <text x={col1X + colWidth - 10} y={countryY(i) + nodeHeight / 2 + 4} fill={RISK_COLOR[c.risk_level]} fontSize={11} textAnchor="end" fontWeight={700}>
-                {c.risk_score}
-              </text>
-            </g>
-          ))}
-
-          {/* Column 2: Attack types */}
-          {attackTypes.map((attack, i) => (
-            <g key={attack}>
-              <rect
-                x={col2X} y={attackY(i)} width={colWidth} height={nodeHeight}
-                rx={6} fill="#1e293b" stroke={ATTACK_COLOR[attack] || "#38bdf8"} strokeWidth={1.5}
-              />
-              <text x={col2X + colWidth / 2} y={attackY(i) + nodeHeight / 2 + 4} fill="#e2e8f0" fontSize={12} textAnchor="middle" fontWeight={600}>
-                {attack}
-              </text>
-            </g>
-          ))}
-
-          {/* Column 3: Risk levels */}
-          {riskLevels.map((level, i) => (
-            <g key={level}>
-              <rect
-                x={col3X} y={riskY(i)} width={colWidth} height={nodeHeight}
-                rx={6} fill="#1e293b" stroke={RISK_COLOR[level]} strokeWidth={1.5}
-              />
-              <text x={col3X + colWidth / 2} y={riskY(i) + nodeHeight / 2 + 4} fill={RISK_COLOR[level]} fontSize={12} textAnchor="middle" fontWeight={700}>
-                {level}
-              </text>
-            </g>
-          ))}
+          {vectors.map((v, i) => {
+            const y = yOf(i, vectors.length) - NODE_H / 2;
+            return (
+              <g key={v} onMouseEnter={() => setHover(`v-${v}`)} onMouseLeave={() => setHover(null)}>
+                <rect x={x2} y={y} width={COL_W} height={NODE_H} rx={10} fill={C.ink2} />
+                <text x={x2 + COL_W / 2} y={y + NODE_H / 2 + 4} fontSize={13} fontWeight={600} textAnchor="middle" fill={C.paper}>{v}</text>
+              </g>
+            );
+          })}
+          {levels.map((l, i) => {
+            const y = yOf(i, levels.length) - NODE_H / 2;
+            return (
+              <g key={l}>
+                <rect x={x4} y={y} width={COL_W} height={NODE_H} rx={10} fill={SEVERITY[l].tint} />
+                <text x={x4 + COL_W / 2} y={y + NODE_H / 2 + 4} fontSize={13} fontWeight={700} textAnchor="middle" fill={SEVERITY[l].text}>
+                  {SEVERITY[l].label} · {top.filter((c) => c.risk_level === l).length}
+                </text>
+              </g>
+            );
+          })}
         </svg>
       </div>
-
-      <div className="flex items-center justify-center gap-6 mt-3 text-[10px] text-slate-500">
-        <span>Country</span>
-        <span>→</span>
-        <span>Primary Vector</span>
-        <span>→</span>
-        <span>Risk Level</span>
-      </div>
-    </div>
+    </Card>
   );
 }
