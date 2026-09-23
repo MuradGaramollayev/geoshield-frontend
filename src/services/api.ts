@@ -218,6 +218,7 @@ export type SourceOrigin =
   | "not_found"
   | "no_key"
   | "offline"
+  | "quota_guard"     // public demo budget: no vendor was contacted
   | "error";
 
 export interface SourceStatus {
@@ -225,6 +226,16 @@ export interface SourceStatus {
   fetched_at?: string;
   age_hours?: number;
   detail?: string;
+}
+
+/** How much of the public demo's live-call budget is left. */
+export interface PublicLimit {
+  allow_request: boolean;
+  allow_live: boolean;
+  live_remaining_today: number;
+  live_remaining_for_you: number;
+  requests_remaining_for_you: number;
+  reason: string;
 }
 
 export interface IocLookupResult {
@@ -241,6 +252,8 @@ export interface IocLookupResult {
   greynoise?: GreyNoiseData;
   risk_level: string;
   recommendation: string;
+  /** Present only on the public (landing page) endpoint. */
+  public_limit?: PublicLimit;
 }
 
 export async function lookupIoc(ip: string, refresh = false): Promise<IocLookupResult> {
@@ -257,6 +270,18 @@ export interface IocCacheEntry {
 }
 
 /** Which IPs have genuine cached vendor responses (used for demo preparation). */
+/**
+ * The landing page's lookup. Same data as lookupIoc, but the backend budgets
+ * how many live vendor calls public traffic may spend, so a visitor cannot
+ * drain the quota the live demo depends on. A refusal still returns a body:
+ * it is an honest "no data", not an error to hide.
+ */
+export async function lookupIocPublic(ip: string): Promise<IocLookupResult> {
+  const res = await fetch(`${BASE_URL}/api/ioc/public-lookup?ip=${encodeURIComponent(ip)}`);
+  if (!res.ok && res.status !== 429) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
 export async function fetchIocCache(): Promise<{ count: number; ttl_hours: number; entries: IocCacheEntry[] }> {
   const res = await fetch(`${BASE_URL}/api/ioc/cache/list`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);

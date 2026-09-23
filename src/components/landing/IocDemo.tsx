@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Search } from "lucide-react";
-import { lookupIoc } from "../../services/api";
+import { lookupIocPublic } from "../../services/api";
 import type { IocLookupResult, SourceOrigin } from "../../services/api";
 import { useTheme } from "../../design/themeContext";
 import { Button, MethodologyNote, TextField } from "../ui";
@@ -18,6 +18,7 @@ const ORIGIN_LABEL: Record<SourceOrigin, string> = {
   auth_error: "key rejected",
   not_found: "no record",
   no_key: "no key configured",
+  quota_guard: "not called · demo budget",
   offline: "vendor unreachable",
   error: "lookup failed",
 };
@@ -59,7 +60,7 @@ export default function IocDemo() {
     setBusy(true);
     setError(null);
     try {
-      setResult(await lookupIoc(target));
+      setResult(await lookupIocPublic(target));
     } catch (e) {
       setResult(null);
       setError(e instanceof Error ? e.message : "Lookup failed");
@@ -117,8 +118,10 @@ export default function IocDemo() {
         </div>
 
         <MethodologyNote className="mt-6">
-          Free vendor tiers are rate limited. When a limit is hit and nothing genuine is
-          cached, the lookup returns "data unavailable" rather than a number we made up.
+          Free vendor tiers are rate limited, so this public demo budgets how many live
+          vendor calls it may make and spaces them out. Cached addresses always resolve
+          from genuine vendor responses. When no live call is available and nothing is
+          cached, the lookup says "data unavailable" rather than inventing a number.
         </MethodologyNote>
       </div>
 
@@ -161,6 +164,13 @@ export default function IocDemo() {
                 <Row label="VirusTotal malicious" value={vt.malicious !== undefined ? `${vt.malicious}` : "—"} />
                 <Row label="Assessment" value={result.risk_level} />
               </div>
+            )}
+
+            {result.public_limit && result.public_limit.live_remaining_today <= 5 && (
+              <p className="mt-4 text-2xs text-text-3">
+                {result.public_limit.live_remaining_today} live lookups left in today's public
+                allowance. Cached addresses are unaffected.
+              </p>
             )}
 
             <div className="mt-5 flex flex-wrap gap-1.5">
