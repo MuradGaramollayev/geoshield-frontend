@@ -2,11 +2,11 @@ import { createContext, useContext } from "react";
 
 export type Panel = "analyst" | "enterprise" | "public";
 
-/** Theme defaults: the Analyst console is dark, Enterprise and public pages light. */
+/** Theme defaults: the Analyst console and the landing page are dark, Enterprise light. */
 export const DEFAULT_THEME: Record<Panel, "light" | "dark"> = {
   analyst: "dark",
   enterprise: "light",
-  public: "light",
+  public: "dark",
 };
 
 export const PanelContext = createContext<Panel>("public");
