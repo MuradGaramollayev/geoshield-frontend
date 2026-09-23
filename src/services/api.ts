@@ -980,3 +980,45 @@ export async function deleteAlertRule(id: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/alert-rules/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 }
+
+/* ── Audit trail ───────────────────────────────────────────────── */
+
+export interface AuditEntry {
+  at: string;
+  action: string;
+  label: string;
+  category: string;
+  detail: string;
+  target: string;
+  actor: string;
+  context?: Record<string, unknown>;
+}
+
+export interface AuditPage {
+  count: number;
+  entries: AuditEntry[];
+  actions: { action: string; label: string; category: string }[];
+  methodology: string;
+}
+
+export async function fetchAuditLog(action = "", limit = 200): Promise<AuditPage> {
+  const query = `limit=${limit}${action ? `&action=${encodeURIComponent(action)}` : ""}`;
+  const res = await fetch(`${BASE_URL}/api/audit?${query}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export interface AuditSummary {
+  total: number;
+  first_at: string | null;
+  last_at: string | null;
+  by_action: Record<string, number>;
+  by_category: Record<string, number>;
+  methodology: string;
+}
+
+export async function fetchAuditSummary(): Promise<AuditSummary> {
+  const res = await fetch(`${BASE_URL}/api/audit/summary`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}

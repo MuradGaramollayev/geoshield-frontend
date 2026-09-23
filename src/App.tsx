@@ -34,6 +34,7 @@ const SupplyChainRisk = lazy(() => import("./pages/enterprise/SupplyChainRisk"))
 const Benchmarking = lazy(() => import("./pages/enterprise/Benchmarking"));
 const InfrastructureCorrelation = lazy(() => import("./pages/InfrastructureCorrelation"));
 const AlertRules = lazy(() => import("./pages/AlertRules"));
+const AuditTrail = lazy(() => import("./pages/enterprise/AuditTrail"));
 
 function RouteFallback() {
   return (
@@ -83,6 +84,7 @@ function App() {
           <Route path="/enterprise/benchmarking" element={<Benchmarking />} />
           <Route path="/enterprise/reports" element={<EnterpriseReports />} />
           <Route path="/enterprise/alerts" element={<AlertOverview />} />
+          <Route path="/enterprise/audit" element={<AuditTrail />} />
           <Route path="/enterprise/integrations" element={<EnterpriseIntegrations />} />
           <Route path="/enterprise/docs" element={<EnterpriseDocs />} />
           <Route path="/enterprise/settings" element={<EnterpriseSettings />} />
