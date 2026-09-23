@@ -148,7 +148,7 @@ export default function InfrastructureCorrelation() {
             <Card>
               <CardHeader
                 title="Malware families across borders"
-                description={malware.data ? `${malware.data.servers_listed} C2 servers listed by Feodo Tracker` : "Feodo Tracker"}
+                description={malware.data ? `${malware.data.c2_servers_attributed} C2 servers across ${malware.data.countries_hosting_c2} countries; ${malware.data.servers_listed} carry a named family` : "Feodo Tracker"}
               />
               {malware.error ? (
                 <ErrorState message={malware.error} onRetry={malware.reload} />

@@ -892,6 +892,91 @@ export async function fetchOperator(name: string): Promise<OperatorDetail> {
   return cachedGet(`/api/correlation/operator/${encodeURIComponent(name)}`);
 }
 
-export async function fetchMalwareSpread(): Promise<{ count: number; servers_listed: number; families: MalwareFamily[]; methodology: string }> {
+export interface MalwareSpread {
+  count: number;
+  servers_listed: number;
+  c2_servers_attributed: number;
+  countries_hosting_c2: number;
+  families: MalwareFamily[];
+  methodology: string;
+}
+
+export async function fetchMalwareSpread(): Promise<MalwareSpread> {
   return cachedGet("/api/correlation/malware");
+}
+
+/* ── Custom alert rules ────────────────────────────────────────── */
+
+export interface RuleMatch {
+  code: string;
+  name: string;
+  value: number;
+  risk_score: number;
+  risk_level: string;
+}
+
+export interface AlertRule {
+  id: string;
+  name: string;
+  field: string;
+  field_label: string;
+  unit: string;
+  expression: string;
+  comparator: string;
+  threshold: number;
+  severity: string;
+  scope: string[];
+  enabled: boolean;
+  created_at: string;
+  matches: RuleMatch[];
+  match_count: number;
+  countries_tested: number;
+  evaluated_at: string | null;
+  note?: string;
+}
+
+export interface RuleField {
+  field: string;
+  label: string;
+  unit: string;
+  description: string;
+  available: boolean;
+}
+
+export async function fetchAlertRules(): Promise<{ count: number; firing: number; rules: AlertRule[]; methodology: string }> {
+  const res = await fetch(`${BASE_URL}/api/alert-rules`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchRuleFields(): Promise<{ fields: RuleField[]; comparators: { value: string; symbol: string }[] }> {
+  return cachedGet("/api/alert-rules/fields");
+}
+
+export async function createAlertRule(rule: {
+  name: string;
+  field: string;
+  comparator: string;
+  threshold: number;
+  severity: string;
+  scope: string[];
+}): Promise<AlertRule> {
+  const res = await fetch(`${BASE_URL}/api/alert-rules`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(rule),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function toggleAlertRule(id: string, enabled: boolean): Promise<AlertRule> {
+  const res = await fetch(`${BASE_URL}/api/alert-rules/${id}?enabled=${enabled}`, { method: "PATCH" });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteAlertRule(id: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/alert-rules/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
 }

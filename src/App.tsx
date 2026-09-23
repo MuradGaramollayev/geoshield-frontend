@@ -33,6 +33,7 @@ const RiskForecast = lazy(() => import("./pages/enterprise/RiskForecast"));
 const SupplyChainRisk = lazy(() => import("./pages/enterprise/SupplyChainRisk"));
 const Benchmarking = lazy(() => import("./pages/enterprise/Benchmarking"));
 const InfrastructureCorrelation = lazy(() => import("./pages/InfrastructureCorrelation"));
+const AlertRules = lazy(() => import("./pages/AlertRules"));
 
 function RouteFallback() {
   return (
@@ -64,6 +65,7 @@ function App() {
           <Route path="timeline" element={<ThreatTimeline />} />
           <Route path="incidents" element={<Incidents />} />
           <Route path="alerts" element={<AlertCenter />} />
+          <Route path="alert-rules" element={<AlertRules />} />
           <Route path="threats" element={<ThreatExplorer />} />
           <Route path="reports" element={<Reports />} />
           <Route path="integrations" element={<Integrations />} />

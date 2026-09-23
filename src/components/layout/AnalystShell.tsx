@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
-  BarChart3, Bell, BookOpen, ClipboardList, Clock, FileText, Grid3x3, Home, Plug, ScanSearch, Settings, ShieldAlert, Network,
+  BarChart3, Bell, BookOpen, ClipboardList, Clock, FileText, Grid3x3, Home, Plug, ScanSearch, Settings, ShieldAlert, Network, SlidersHorizontal,
 } from "lucide-react";
 import { PanelContext } from "../../design/panel";
 import { ThemeProvider } from "../../design/theme";
@@ -24,6 +24,7 @@ const ANALYST_NAV: PaletteNavItem[] = [
   { icon: Network, label: "Correlation", path: "/analyst/correlation", group: "Investigate" },
   { icon: ClipboardList, label: "Incident Queue", path: "/analyst/incidents", group: "Respond" },
   { icon: Bell, label: "Alert Center", path: "/analyst/alerts", group: "Respond" },
+  { icon: SlidersHorizontal, label: "Alert Rules", path: "/analyst/alert-rules", group: "Respond" },
   { icon: FileText, label: "Reports", path: "/analyst/reports", group: "Respond" },
   { icon: Plug, label: "Integrations", path: "/analyst/integrations", group: "Workspace" },
   { icon: Settings, label: "Settings", path: "/analyst/settings", group: "Workspace" },
