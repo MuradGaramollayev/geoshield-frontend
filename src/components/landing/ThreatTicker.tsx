@@ -17,7 +17,7 @@ export default function ThreatTicker() {
   if (events.length === 0) return null;
 
   return (
-    <div className="overflow-hidden border-b border-line bg-surface py-5">
+    <div className="relative overflow-hidden border-b border-line bg-surface/70 py-5">
       <div className="mx-auto mb-3 flex max-w-6xl items-center gap-2 px-6">
         <span className="live-dot" />
         <span className="code text-2xs uppercase tracking-[0.16em] text-text-2">

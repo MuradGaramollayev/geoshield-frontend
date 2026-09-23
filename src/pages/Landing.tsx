@@ -1,5 +1,6 @@
 import { ThemeProvider } from "../design/theme";
 import { PanelContext } from "../design/panel";
+import Ambience from "../components/landing/Ambience";
 import Nav from "../components/landing/Nav";
 import Hero from "../components/landing/Hero";
 import LiveStats from "../components/landing/LiveStats";
@@ -18,9 +19,10 @@ export default function Landing() {
   return (
     <PanelContext.Provider value="public">
       <ThemeProvider panel="public">
-        <div className="min-h-screen bg-surface text-ink">
+        <div className="relative min-h-screen bg-surface text-ink">
+          <Ambience />
           <Nav />
-          <main>
+          <main className="relative">
             <Hero />
             <LiveStats />
             <ThreatTicker />
@@ -31,6 +33,7 @@ export default function Landing() {
               title="Try it on a real address"
               lead="The same lookup the console runs, on this page, against the live vendors."
               tone="sunken"
+              veil="top-right"
             >
               <IocDemo />
             </Section>
@@ -56,6 +59,7 @@ export default function Landing() {
               eyebrow="Two consoles"
               title="One system, two tempos"
               lead="The same design tokens and the same data throughout. Only the density, the pacing and the language change."
+              veil="bottom-left"
             >
               <Consoles />
             </Section>
@@ -77,7 +81,7 @@ export default function Landing() {
               <Plans />
             </Section>
           </main>
-          <Closing />
+          <div className="relative"><Closing /></div>
         </div>
       </ThemeProvider>
     </PanelContext.Provider>

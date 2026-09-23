@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useReveal, revealStyle } from "./reveal";
+import HexVeil from "./HexVeil";
 
 /**
  * One landing section: an eyebrow, a heading, optional lead paragraph, and the
@@ -13,6 +14,7 @@ export default function Section({
   children,
   align = "center",
   tone = "plain",
+  veil,
 }: {
   id?: string;
   eyebrow?: string;
@@ -21,6 +23,8 @@ export default function Section({
   children?: ReactNode;
   align?: "center" | "left";
   tone?: "plain" | "sunken";
+  /** Carries the hero's hexagon motif into this section as a still texture. */
+  veil?: "top-right" | "bottom-left";
 }) {
   const { ref, shown } = useReveal<HTMLElement>();
   const centred = align === "center";
@@ -29,9 +33,12 @@ export default function Section({
     <section
       id={id}
       ref={ref}
-      className={`px-6 py-20 sm:py-28 ${tone === "sunken" ? "bg-sunken" : ""}`}
+      className={`relative overflow-hidden px-6 py-20 sm:py-28 ${
+        tone === "sunken" ? "bg-sunken/55" : ""
+      }`}
     >
-      <div className="mx-auto max-w-6xl">
+      {veil && <HexVeil corner={veil} />}
+      <div className="relative mx-auto max-w-6xl">
         {(eyebrow || title || lead) && (
           <header
             className={`mb-12 sm:mb-16 ${centred ? "text-center mx-auto max-w-2xl" : "max-w-2xl"}`}

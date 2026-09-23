@@ -25,7 +25,7 @@ export default function Hero() {
   const index = status.data?.data.avg_risk;
 
   return (
-    <div className="relative overflow-hidden bg-surface">
+    <div className="relative overflow-hidden">
       <HexField className="absolute inset-0 h-full w-full" />
       <div
         className="pointer-events-none absolute -top-40 right-[-10%] h-[520px] w-[520px] rounded-full blur-3xl opacity-25"

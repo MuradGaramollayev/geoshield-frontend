@@ -394,6 +394,52 @@
   .marquee { overflow-x: auto; }
 }
 
+/* ── Landing: ambience ──────────────────────────────────────────────
+   A fixed field behind the whole page, so scrolling moves the content
+   across a designed backdrop rather than a flat fill. Fixed means the
+   browser composites it once: no scroll-linked work, no repaint. */
+.ambience {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+/* The hexagon motif carried past the hero, as one static path behind a
+   section. No canvas, no animation - it is a texture, not a widget. */
+.hex-veil {
+  position: absolute;
+  pointer-events: none;
+  color: var(--color-line-strong);
+  opacity: 0.5;
+}
+[data-theme="dark"] .hex-veil { opacity: 0.36; }
+
+/* A card that lights up under the cursor. The position arrives as two
+   custom properties, so moving the pointer only updates a gradient
+   origin: no layout, no paint of anything but this one layer. */
+.spot { position: relative; isolation: isolate; }
+.spot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 240ms var(--ease-out-soft);
+  background: radial-gradient(
+    260px circle at var(--mx, 50%) var(--my, 50%),
+    color-mix(in srgb, var(--color-accent) 16%, transparent),
+    transparent 70%
+  );
+}
+.spot:hover::before,
+.spot:focus-visible::before { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .spot::before { transition: none; }
+}
+
 /* ── Map: pulse markers and MapLibre chrome ─────────────────────── */
 .hex-pulse {
   position: relative;

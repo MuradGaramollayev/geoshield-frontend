@@ -18,7 +18,7 @@ export default function LiveStats() {
     : [];
 
   return (
-    <div ref={ref} className="border-y border-line bg-sunken px-6 py-12">
+    <div ref={ref} className="relative border-y border-line bg-sunken/55 px-6 py-12">
       <div className="mx-auto grid max-w-6xl grid-cols-2 gap-8 sm:grid-cols-4">
         {loading || !data
           ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-[12px]" />)

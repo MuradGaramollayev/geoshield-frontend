@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, FileText, Globe2, Grid3x3, Search, ShieldAlert, Sparkles } from "lucide-react";
 import { IconTile } from "../ui";
@@ -49,10 +49,26 @@ const FEATURES = [
   },
 ];
 
-/** Feature grid. Each card lifts, reveals its detail line, and links through. */
+/** Feature grid. Each card lifts, lights up under the cursor, reveals its
+ *  detail line, and links through. */
 export default function Capabilities() {
   const { ref, shown } = useReveal<HTMLDivElement>();
   const [active, setActive] = useState<string | null>(null);
+  const frame = useRef(0);
+
+  // The cursor position reaches CSS as two custom properties; one rAF at a
+  // time keeps a fast pointer from queueing style writes.
+  const track = (e: React.PointerEvent<HTMLElement>) => {
+    const el = e.currentTarget;
+    const { clientX, clientY } = e;
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      const r = el.getBoundingClientRect();
+      el.style.setProperty("--mx", `${((clientX - r.left) / r.width) * 100}%`);
+      el.style.setProperty("--my", `${((clientY - r.top) / r.height) * 100}%`);
+    });
+  };
 
   return (
     <div ref={ref} className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -66,7 +82,8 @@ export default function Capabilities() {
             onMouseLeave={() => setActive(null)}
             onFocus={() => setActive(f.title)}
             onBlur={() => setActive(null)}
-            className="e2 group relative flex flex-col rounded-[16px] p-6 interactive hover:-translate-y-1"
+            onPointerMove={track}
+            className="e2 spot group relative flex flex-col rounded-[16px] p-6 interactive hover:-translate-y-1"
             style={revealStyle(shown, i)}
           >
             <span className="flex items-start justify-between">
