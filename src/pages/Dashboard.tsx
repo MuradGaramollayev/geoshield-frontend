@@ -4,7 +4,8 @@ import { useAsync } from "../hooks/useAsync";
 import { useTheme } from "../design/themeContext";
 import RiskIndexCard from "../components/common/RiskIndexCard";
 import RiskScoreNote from "../components/common/RiskScoreNote";
-import WorldMap from "../components/charts/WorldMap";
+import HexRiskMap from "../components/map/HexRiskMap";
+import ActivityFeed from "../components/common/ActivityFeed";
 import { ErrorState, PageHeader, Skeleton, SkeletonCard, Sparkline, StatTile } from "../components/ui";
 
 const DAYS = 14;
@@ -51,7 +52,11 @@ export default function Dashboard() {
             })}
       </div>
 
-      <WorldMap />
+      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] gap-[var(--gap-grid)]">
+        <HexRiskMap height={440} />
+        <ActivityFeed height={440} limit={9} />
+      </div>
+
       <RiskScoreNote />
     </div>
   );

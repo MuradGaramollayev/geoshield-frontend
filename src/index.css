@@ -412,3 +412,42 @@
 .legacy-landing .text-emerald { color: #10B981; }
 .legacy-landing .bg-surface { background-color: #111827; }
 .legacy-landing .bg-panel { background-color: #1F2937; }
+
+/* ── Map: pulse markers and MapLibre chrome ─────────────────────── */
+.hex-pulse {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.hex-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--pulse-color, var(--color-accent));
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+.hex-pulse-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 2px solid var(--pulse-color, var(--color-accent));
+  animation: var(--animate-pulse-ring);
+}
+.hex-pulse:hover .hex-pulse-dot { transform: scale(1.25); }
+.hex-pulse-dot { transition: transform var(--dur) var(--ease-out-soft); }
+
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  background: var(--color-paper) !important;
+  color: var(--color-text-3);
+  border-radius: 10px;
+  font-size: 10px;
+}
+.maplibregl-ctrl-attrib a { color: var(--color-text-2) !important; }
+.maplibregl-ctrl-attrib-button { filter: invert(var(--attrib-invert, 0)); }
+[data-theme="dark"] { --attrib-invert: 1; }
+.maplibregl-canvas:focus-visible { outline: 2px solid var(--color-accent); }

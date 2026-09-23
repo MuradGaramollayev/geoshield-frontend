@@ -11,7 +11,8 @@ import { useMotion } from "../../design/panel";
 import { getUser } from "../../utils/auth";
 import RiskIndexCard from "../../components/common/RiskIndexCard";
 import RiskScoreNote from "../../components/common/RiskScoreNote";
-import WorldMap from "../../components/charts/WorldMap";
+import HexRiskMap from "../../components/map/HexRiskMap";
+import ActivityFeed from "../../components/common/ActivityFeed";
 import { Card, CardHeader, ErrorState, SeverityBadge, Skeleton, SkeletonCard, StatTile, TrendBadge } from "../../components/ui";
 
 const OPEN = new Set(["NEW", "ASSIGNED", "INVESTIGATING"]);
@@ -87,7 +88,11 @@ export default function EnterpriseDashboard() {
 
       <div className="grid grid-cols-1 2xl:grid-cols-3 gap-[var(--gap-grid)]">
         <div className="2xl:col-span-2">
-          <WorldMap title="Where exposure comes from" description="Countries coloured by risk score. Select one for a strategic summary." />
+          <HexRiskMap
+            title="Where exposure comes from"
+            description="Each hexagon takes its country's risk score. Select a country for a strategic summary."
+            height={520}
+          />
         </div>
         <Card>
           <CardHeader
@@ -119,6 +124,8 @@ export default function EnterpriseDashboard() {
           )}
         </Card>
       </div>
+
+      <ActivityFeed limit={7} height={360} />
 
       <RiskScoreNote />
     </div>

@@ -128,6 +128,20 @@ export interface CountriesData {
 export async function fetchCountries(): Promise<CountriesData> {
   return cachedGet<CountriesData>("/api/countries");
 }
+/** A correlation between two countries, from shared hosting or shared malware family. */
+export interface ThreatFlowLink {
+  source: string;
+  target: string;
+  kind: "hosting" | "malware";
+  weight: number;
+  shared: string[];
+  detail: string;
+}
+
+export async function fetchThreatFlows(limit = 40): Promise<{ count: number; links: ThreatFlowLink[]; methodology: string }> {
+  return cachedGet(`/api/threat-flows?limit=${limit}`);
+}
+
 export interface CountryDetail {
   code: string;
   name: string;
