@@ -847,3 +847,51 @@ export interface PeerBand {
 export async function fetchPeerBands(): Promise<{ count: number; bands: PeerBand[] }> {
   return cachedGet("/api/benchmark/peers/bands");
 }
+
+/* ── Infrastructure correlation ────────────────────────────────── */
+
+export interface OperatorCountry { code: string; addresses: number }
+
+export interface OperatorRow {
+  operator: string;
+  addresses: number;
+  country_count: number;
+  concentration: number;
+  countries: OperatorCountry[];
+}
+
+export interface OperatorsResult {
+  count: number;
+  total_operators: number;
+  cross_border_operators: number;
+  addresses_listed: number;
+  addresses_in_cross_border_operators: number;
+  min_countries: number;
+  operators: OperatorRow[];
+  methodology: string;
+}
+
+export interface OperatorDetail extends OperatorRow {
+  cities: { city: string; addresses: number }[];
+  sample_addresses: string[];
+  methodology: string;
+}
+
+export interface MalwareFamily {
+  family: string;
+  servers: number;
+  country_count: number;
+  countries: { code: string; servers: number }[];
+}
+
+export async function fetchOperators(minCountries = 2, limit = 25): Promise<OperatorsResult> {
+  return cachedGet(`/api/correlation/operators?limit=${limit}&min_countries=${minCountries}`);
+}
+
+export async function fetchOperator(name: string): Promise<OperatorDetail> {
+  return cachedGet(`/api/correlation/operator/${encodeURIComponent(name)}`);
+}
+
+export async function fetchMalwareSpread(): Promise<{ count: number; servers_listed: number; families: MalwareFamily[]; methodology: string }> {
+  return cachedGet("/api/correlation/malware");
+}

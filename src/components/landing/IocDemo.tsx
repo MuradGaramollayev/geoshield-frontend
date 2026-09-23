@@ -186,7 +186,7 @@ export default function IocDemo() {
             </div>
 
             <Link
-              to="/analyst/ioc"
+              to="/analyst/ioc-explorer"
               className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-accent-ink hover:underline"
             >
               Full enrichment in the console <ArrowRight size={14} />

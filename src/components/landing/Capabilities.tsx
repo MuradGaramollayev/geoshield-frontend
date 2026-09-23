@@ -16,7 +16,7 @@ const FEATURES = [
     icon: Search,
     title: "IOC enrichment",
     body: "One address, four vendors. Each field states whether it came from a live call, the cache, or nowhere at all.",
-    to: "/analyst/ioc",
+    to: "/analyst/ioc-explorer",
     detail: "AbuseIPDB · VirusTotal · Shodan · GreyNoise",
   },
   {

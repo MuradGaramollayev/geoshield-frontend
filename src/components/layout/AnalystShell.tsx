@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
-  BarChart3, Bell, BookOpen, ClipboardList, Clock, FileText, Grid3x3, Home, Plug, ScanSearch, Settings, ShieldAlert,
+  BarChart3, Bell, BookOpen, ClipboardList, Clock, FileText, Grid3x3, Home, Plug, ScanSearch, Settings, ShieldAlert, Network,
 } from "lucide-react";
 import { PanelContext } from "../../design/panel";
 import { ThemeProvider } from "../../design/theme";
@@ -21,6 +21,7 @@ const ANALYST_NAV: PaletteNavItem[] = [
   { icon: BarChart3, label: "Analytics", path: "/analyst/analytics", group: "Monitor" },
   { icon: ScanSearch, label: "IOC Explorer", path: "/analyst/ioc-explorer", group: "Investigate" },
   { icon: Grid3x3, label: "MITRE ATT&CK", path: "/analyst/mitre", group: "Investigate" },
+  { icon: Network, label: "Correlation", path: "/analyst/correlation", group: "Investigate" },
   { icon: ClipboardList, label: "Incident Queue", path: "/analyst/incidents", group: "Respond" },
   { icon: Bell, label: "Alert Center", path: "/analyst/alerts", group: "Respond" },
   { icon: FileText, label: "Reports", path: "/analyst/reports", group: "Respond" },

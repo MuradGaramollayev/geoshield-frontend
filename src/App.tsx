@@ -32,6 +32,7 @@ const DefenseArchitecture = lazy(() => import("./pages/enterprise/DefenseArchite
 const RiskForecast = lazy(() => import("./pages/enterprise/RiskForecast"));
 const SupplyChainRisk = lazy(() => import("./pages/enterprise/SupplyChainRisk"));
 const Benchmarking = lazy(() => import("./pages/enterprise/Benchmarking"));
+const InfrastructureCorrelation = lazy(() => import("./pages/InfrastructureCorrelation"));
 
 function RouteFallback() {
   return (
@@ -59,6 +60,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="ioc-explorer" element={<IocExplorer />} />
           <Route path="mitre" element={<MitreAttack />} />
+          <Route path="correlation" element={<InfrastructureCorrelation />} />
           <Route path="timeline" element={<ThreatTimeline />} />
           <Route path="incidents" element={<Incidents />} />
           <Route path="alerts" element={<AlertCenter />} />
