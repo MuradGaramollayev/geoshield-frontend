@@ -6,17 +6,18 @@ import {
   computeCriticalHighRatio, computeMeanResponseMinutes, fetchCountries, fetchIncidents, fetchStatus, fetchTimeline,
 } from "../../services/api";
 import { useAsync } from "../../hooks/useAsync";
-import { SEVERITY } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
 import { useMotion } from "../../design/panel";
 import { getUser } from "../../utils/auth";
 import RiskIndexCard from "../../components/common/RiskIndexCard";
 import RiskScoreNote from "../../components/common/RiskScoreNote";
 import WorldMap from "../../components/charts/WorldMap";
-import { Card, CardHeader, ErrorState, SeverityBadge, Skeleton, SkeletonCard, StatTile } from "../../components/ui";
+import { Card, CardHeader, ErrorState, SeverityBadge, Skeleton, SkeletonCard, StatTile, TrendBadge } from "../../components/ui";
 
 const OPEN = new Set(["NEW", "ASSIGNED", "INVESTIGATING"]);
 
 export default function EnterpriseDashboard() {
+  const th = useTheme();
   const { data, error, loading, reload } = useAsync(
     () => Promise.all([fetchStatus(), fetchCountries(), fetchIncidents(), fetchTimeline(90)]),
     [],
@@ -76,7 +77,7 @@ export default function EnterpriseDashboard() {
               icon={<Skull size={18} />}
               label="Ransomware-linked CVEs"
               value={ransomware}
-              valueTone={ransomware ? SEVERITY.CRITICAL.text : undefined}
+              valueTone={ransomware ? th.sev.CRITICAL.text : undefined}
               footer="Added to CISA KEV, last 90 days"
               delay={0.21}
             />
@@ -91,6 +92,7 @@ export default function EnterpriseDashboard() {
         <Card>
           <CardHeader
             title="Highest-exposure countries"
+            description={countries && countries.trend_days < 2 ? "Trend appears once two daily snapshots exist" : undefined}
             actions={<Link to="/enterprise/analytics" className="text-sm font-semibold text-accent-ink hover:underline">Analytics</Link>}
           />
           {loading ? (
@@ -102,9 +104,14 @@ export default function EnterpriseDashboard() {
                   <span className="num text-sm text-text-3 w-5">{i + 1}</span>
                   <span className="flex-1 min-w-0">
                     <span className="block text-base font-semibold text-ink truncate">{c.name}</span>
-                    <span className="block text-sm text-text-3">{c.total_threats.toLocaleString()} indicators</span>
+                    <span className="block text-sm text-text-3">{c.total_threats.toLocaleString()} indicators · {c.primary_attack}</span>
                   </span>
                   <span className="num text-lg font-medium text-ink">{c.risk_score}</span>
+                  {c.trend !== "insufficient" && (
+                    <TrendBadge trend={c.trend} days={c.trend_days}>
+                      {`${c.trend_change > 0 ? "+" : ""}${c.trend_change}`}
+                    </TrendBadge>
+                  )}
                   <SeverityBadge severity={c.risk_level} />
                 </li>
               ))}

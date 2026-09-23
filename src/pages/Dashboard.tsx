@@ -1,7 +1,7 @@
 import { AlertTriangle, Bug, Radio, Skull } from "lucide-react";
 import { buildSparkline, fetchStatus, fetchTimeline, formatAsOf } from "../services/api";
 import { useAsync } from "../hooks/useAsync";
-import { SEVERITY, color as C } from "../design/tokens";
+import { useTheme } from "../design/themeContext";
 import RiskIndexCard from "../components/common/RiskIndexCard";
 import RiskScoreNote from "../components/common/RiskScoreNote";
 import WorldMap from "../components/charts/WorldMap";
@@ -10,6 +10,7 @@ import { ErrorState, PageHeader, Skeleton, SkeletonCard, Sparkline, StatTile } f
 const DAYS = 14;
 
 export default function Dashboard() {
+  const th = useTheme();
   const { data, error, loading, reload } = useAsync(() => Promise.all([fetchStatus(), fetchTimeline(DAYS)]), []);
   const [status, tl] = data ?? [null, null];
   const ev = tl?.events ?? [];
@@ -17,10 +18,10 @@ export default function Dashboard() {
   const window = asOf ? `${DAYS} days to ${formatAsOf(asOf)}` : `${DAYS} days`;
 
   const tiles = [
-    { label: "Timeline events", icon: <AlertTriangle size={16} />, f: () => true, color: C.ink2 },
-    { label: "CVE exploits", icon: <Bug size={16} />, f: (e: { type: string }) => e.type === "CVE_EXPLOIT", color: C.accent },
-    { label: "C2 servers", icon: <Radio size={16} />, f: (e: { type: string }) => e.type === "C2_DETECTED", color: SEVERITY.HIGH.solid },
-    { label: "Critical events", icon: <Skull size={16} />, f: (e: { severity: string }) => e.severity === "CRITICAL", color: SEVERITY.CRITICAL.solid },
+    { label: "Timeline events", icon: <AlertTriangle size={16} />, f: () => true, color: th.c.ink2 },
+    { label: "CVE exploits", icon: <Bug size={16} />, f: (e: { type: string }) => e.type === "CVE_EXPLOIT", color: th.c.accent },
+    { label: "C2 servers", icon: <Radio size={16} />, f: (e: { type: string }) => e.type === "C2_DETECTED", color: th.sev.HIGH.solid },
+    { label: "Critical events", icon: <Skull size={16} />, f: (e: { severity: string }) => e.severity === "CRITICAL", color: th.sev.CRITICAL.solid },
   ];
 
   if (error) return <ErrorState message={error} onRetry={reload} />;

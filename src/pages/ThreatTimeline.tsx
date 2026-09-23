@@ -5,7 +5,7 @@ import { fetchTimeline } from "../services/api";
 import type { TimelineEvent } from "../services/api";
 import { useAsync } from "../hooks/useAsync";
 import { EMPTY } from "../utils/empty";
-import { SEVERITY } from "../design/tokens";
+import { useTheme } from "../design/themeContext";
 import { useMotion } from "../design/panel";
 import {
   Badge, Card, EmptyState, ErrorState, MethodologyNote, PageHeader, Segmented, SeverityBadge, Skeleton,
@@ -24,6 +24,7 @@ function monthLabel(date: string) {
 }
 
 export default function ThreatTimeline() {
+  const th = useTheme();
   const { data, error, loading, reload } = useAsync(() => fetchTimeline(90), []);
   const [filter, setFilter] = useState<FilterKey>("ALL");
   const m = useMotion();
@@ -79,7 +80,7 @@ export default function ThreatTimeline() {
               </h2>
               <ol className="relative ml-2 border-l border-line-strong">
                 {g.items.map((event, i) => {
-                  const sev = SEVERITY[event.severity];
+                  const sev = th.sev[event.severity];
                   const isC2 = event.type === "C2_DETECTED";
                   return (
                     <motion.li

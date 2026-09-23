@@ -1,12 +1,12 @@
 import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip } from "recharts";
 import { buildRadarData, fetchTimeline } from "../../services/api";
 import { useAsync } from "../../hooks/useAsync";
-import { color as C } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
 import { ChartTooltip } from "../../design/ChartTooltip";
-import { axisTick } from "../../design/chart";
 import { Card, CardHeader, ErrorState, SkeletonCard } from "../ui";
 
 export default function AttackCategoryRadar() {
+  const th = useTheme();
   const { data, error, loading, reload } = useAsync(() => fetchTimeline(21), []);
   if (loading) return <SkeletonCard tall />;
   if (error) return <ErrorState message={error} onRetry={reload} />;
@@ -18,10 +18,10 @@ export default function AttackCategoryRadar() {
       <ResponsiveContainer width="100%" height={300}>
         <RadarChart data={rows} outerRadius="72%">
           <PolarGrid stroke="rgba(22,22,22,0.1)" />
-          <PolarAngleAxis dataKey="category" tick={{ ...axisTick, fontSize: 12, fill: C.text2 }} />
+          <PolarAngleAxis dataKey="category" tick={{ ...th.chart.axisTick, fontSize: 12, fill: th.c.text2 }} />
           <PolarRadiusAxis tick={false} axisLine={false} />
-          <Radar name="Last week" dataKey="lastWeek" stroke={C.text3} fill={C.text3} fillOpacity={0.12} strokeDasharray="4 4" />
-          <Radar name="This week" dataKey="thisWeek" stroke={C.accent} fill={C.accent} fillOpacity={0.25} strokeWidth={2} />
+          <Radar name="Last week" dataKey="lastWeek" stroke={th.c.text3} fill={th.c.text3} fillOpacity={0.12} strokeDasharray="4 4" />
+          <Radar name="This week" dataKey="thisWeek" stroke={th.c.accent} fill={th.c.accent} fillOpacity={0.25} strokeWidth={2} />
           <Tooltip content={<ChartTooltip />} />
         </RadarChart>
       </ResponsiveContainer>

@@ -8,7 +8,7 @@ import {
   fetchQuarantineActivity,
 } from "../../services/api";
 import type { DefenseClassification, DefenseLogEntry, DefenseStats } from "../../services/api";
-import { SEVERITY } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
 import { useMotion } from "../../design/panel";
 import { formatTs } from "../../utils/time";
 import {
@@ -16,15 +16,16 @@ import {
 } from "../../components/ui";
 
 // Visual mapping only: honeypot = highest-risk routing, quarantine = mid, monitoring = low.
-const CLASS_TONE = {
-  HONEYPOT: SEVERITY.CRITICAL,
-  QUARANTINE: SEVERITY.MEDIUM,
-  MONITORING: SEVERITY.LOW,
+const CLASS_SEVERITY = {
+  HONEYPOT: "CRITICAL",
+  QUARANTINE: "MEDIUM",
+  MONITORING: "LOW",
 } as const;
 
 const CLASS_LABEL = { HONEYPOT: "Routed to honeypot", QUARANTINE: "Routed to quarantine", MONITORING: "Monitoring only" } as const;
 
 export default function DefenseArchitecture() {
+  const th = useTheme();
   const [stats, setStats] = useState<DefenseStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,7 +80,7 @@ export default function DefenseArchitecture() {
   }
 
   const log = activeTab === "honeypot" ? honeypotLog : quarantineLog;
-  const tone = classifyResult ? CLASS_TONE[classifyResult.classification] : null;
+  const tone = classifyResult ? th.sev[CLASS_SEVERITY[classifyResult.classification]] : null;
 
   return (
     <div>
@@ -143,8 +144,8 @@ export default function DefenseArchitecture() {
               <motion.span className="w-px bg-line-strong" initial={{ height: 0 }} animate={{ height: 28 }} transition={{ duration: m.enter, delay: 0.5 }} />
               <div className="w-full max-w-md grid grid-cols-2 gap-4">
                 {[
-                  { icon: ShieldAlert, label: "Honeypot zone", v: stats.honeypot_routed, t: SEVERITY.CRITICAL },
-                  { icon: Archive, label: "Quarantine zone", v: stats.quarantine_routed, t: SEVERITY.MEDIUM },
+                  { icon: ShieldAlert, label: "Honeypot zone", v: stats.honeypot_routed, t: th.sev.CRITICAL },
+                  { icon: Archive, label: "Quarantine zone", v: stats.quarantine_routed, t: th.sev.MEDIUM },
                 ].map((z, i) => {
                   const Icon = z.icon;
                   return (

@@ -98,19 +98,31 @@ export function formatAsOf(asOf?: string): string {
   const d = new Date(`${asOf}T00:00:00Z`);
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
+/** Direction of a country's risk score, measured from daily snapshots. */
+export type TrendDirection = "up" | "down" | "stable" | "insufficient";
+
 export interface CountryRisk {
   code: string;
   name: string;
   total_threats: number;
   risk_score: number;
   risk_level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  /** Derived from the country's own source breakdown (backend vectors.py). */
   primary_attack: string;
-  trend: "up" | "down" | "stable";
+  primary_attack_source: string | null;
+  primary_attack_share: number;
+  primary_attack_basis: string;
+  trend: TrendDirection;
+  /** Points of risk score gained or lost across the recorded window. */
+  trend_change: number;
+  /** How many daily snapshots the trend rests on. */
+  trend_days: number;
 }
 
 export interface CountriesData {
   count: number;
   countries: CountryRisk[];
+  trend_days: number;
 }
 
 export async function fetchCountries(): Promise<CountriesData> {
@@ -123,7 +135,13 @@ export interface CountryDetail {
   risk_score: number;
   risk_level: string;
   primary_attack: string;
-  trend: string;
+  primary_attack_source: string | null;
+  primary_attack_share: number;
+  primary_attack_basis: string;
+  trend: TrendDirection;
+  trend_change: number;
+  trend_days: number;
+  score_history: { date: string; risk_score: number }[];
   source_count: number;
   sources: Record<string, number>;
   top_ips: { ip: string; city: string; isp: string }[];
@@ -175,11 +193,34 @@ export interface GreyNoiseData {
   link?: string;
 }
 
+/** Where one source's numbers came from. Nothing is ever synthesised. */
+export type SourceOrigin =
+  | "live"            // fetched from the vendor just now
+  | "cached"          // genuine earlier response, inside the cache TTL
+  | "cached_stale"    // vendor unreachable now; last genuine response shown
+  | "local_dataset"   // from the bundled Shodan / GreyNoise data
+  | "rate_limited"
+  | "auth_error"
+  | "not_found"
+  | "no_key"
+  | "offline"
+  | "error";
+
+export interface SourceStatus {
+  source: SourceOrigin;
+  fetched_at?: string;
+  age_hours?: number;
+  detail?: string;
+}
+
 export interface IocLookupResult {
   ip: string;
-  mode: string;
+  /** live = at least one vendor answered now; cache = shown from cache; unavailable = no vendor data. */
+  mode: "live" | "cache" | "unavailable";
   found?: boolean;
   message?: string;
+  rate_limited?: boolean;
+  sources: Record<string, SourceStatus>;
   abuseipdb: AbuseIPDBData;
   virustotal: VirusTotalData;
   shodan?: ShodanData;
@@ -188,8 +229,22 @@ export interface IocLookupResult {
   recommendation: string;
 }
 
-export async function lookupIoc(ip: string): Promise<IocLookupResult> {
-  const res = await fetch(`${BASE_URL}/api/ioc/lookup?ip=${encodeURIComponent(ip)}`);
+export async function lookupIoc(ip: string, refresh = false): Promise<IocLookupResult> {
+  const res = await fetch(`${BASE_URL}/api/ioc/lookup?ip=${encodeURIComponent(ip)}${refresh ? "&refresh=true" : ""}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export interface IocCacheEntry {
+  ip: string;
+  vendors: string[];
+  fetched_at: string | null;
+  age_hours: number | null;
+}
+
+/** Which IPs have genuine cached vendor responses (used for demo preparation). */
+export async function fetchIocCache(): Promise<{ count: number; ttl_hours: number; entries: IocCacheEntry[] }> {
+  const res = await fetch(`${BASE_URL}/api/ioc/cache/list`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

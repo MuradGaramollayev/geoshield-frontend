@@ -4,13 +4,14 @@ import { Bug, Globe2, ShieldAlert, Skull } from "lucide-react";
 import { fetchCountries, fetchMitreMatrix, fetchTimeline } from "../services/api";
 import { useAsync } from "../hooks/useAsync";
 import { EMPTY } from "../utils/empty";
-import { SEVERITY, SEVERITY_ORDER, toSeverity } from "../design/tokens";
+import { SEVERITY_ORDER, toSeverity } from "../design/tokens";
+import { useTheme } from "../design/themeContext";
 import { ChartTooltip } from "../design/ChartTooltip";
-import { axisTick, axisTickMono, gridStroke } from "../design/chart";
 import RiskScoreNote from "../components/common/RiskScoreNote";
 import { Card, CardHeader, ErrorState, PageHeader, SkeletonCard, StatTile } from "../components/ui";
 
 export default function Analytics() {
+  const th = useTheme();
   const { data, error, loading, reload } = useAsync(
     () => Promise.all([fetchCountries(), fetchMitreMatrix(), fetchTimeline(90)]),
     [],
@@ -62,7 +63,7 @@ export default function Analytics() {
               icon={<Skull size={16} />}
               label="Ransomware-linked"
               value={events.filter((e) => e.ransomware).length}
-              valueTone={SEVERITY.CRITICAL.text}
+              valueTone={th.sev.CRITICAL.text}
               delay={0.09}
             />
           </>
@@ -77,16 +78,16 @@ export default function Analytics() {
           ) : (
             <ResponsiveContainer width="100%" height={340}>
               <BarChart data={top} layout="vertical" margin={{ left: 0, right: 16, top: 0, bottom: 0 }} barCategoryGap={6}>
-                <CartesianGrid stroke={gridStroke} horizontal={false} />
-                <XAxis type="number" domain={[0, 100]} tick={axisTick} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="code" tick={axisTickMono} width={34} axisLine={false} tickLine={false} />
+                <CartesianGrid stroke={th.chart.gridStroke} horizontal={false} />
+                <XAxis type="number" domain={[0, 100]} tick={th.chart.axisTick} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="code" tick={th.chart.axisTickMono} width={34} axisLine={false} tickLine={false} />
                 <Tooltip
-                  cursor={{ fill: "rgba(22,22,22,0.04)" }}
+                  cursor={{ fill: th.chart.cursor }}
                   content={<ChartTooltip labelFormat={(l) => top.find((t) => t.code === l)?.name ?? l} format={(v) => `${v} / 100`} />}
                 />
                 <Bar dataKey="risk" name="Risk score" radius={[0, 6, 6, 0]} isAnimationActive animationDuration={500}>
                   {top.map((t) => (
-                    <Cell key={t.code} fill={SEVERITY[toSeverity(t.level) ?? "LOW"].solid} />
+                    <Cell key={t.code} fill={th.sev[toSeverity(t.level) ?? "LOW"].solid} />
                   ))}
                 </Bar>
               </BarChart>
@@ -102,14 +103,14 @@ export default function Analytics() {
             <div>
               <div className="flex h-4 rounded-full overflow-hidden mb-6 gap-0.5">
                 {dist.filter((d) => d.n > 0).map((d) => (
-                  <span key={d.s} style={{ width: `${(d.n / countries.length) * 100}%`, background: SEVERITY[d.s].solid }} title={`${SEVERITY[d.s].label}: ${d.n}`} />
+                  <span key={d.s} style={{ width: `${(d.n / countries.length) * 100}%`, background: th.sev[d.s].solid }} title={`${th.sev[d.s].label}: ${d.n}`} />
                 ))}
               </div>
               <ul className="divide-y divide-line">
                 {dist.map((d) => (
                   <li key={d.s} className="flex items-center gap-3 py-3">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: SEVERITY[d.s].solid }} />
-                    <span className="flex-1 text-base text-ink">{SEVERITY[d.s].label}</span>
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: th.sev[d.s].solid }} />
+                    <span className="flex-1 text-base text-ink">{th.sev[d.s].label}</span>
                     <span className="num text-xl font-medium text-ink">{d.n}</span>
                     <span className="num text-sm text-text-3 w-12 text-right">
                       {countries.length ? Math.round((d.n / countries.length) * 100) : 0}%
@@ -129,16 +130,16 @@ export default function Analytics() {
         ) : (
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={techniques} margin={{ left: 0, right: 8, top: 8, bottom: 0 }} barCategoryGap={10}>
-              <CartesianGrid stroke={gridStroke} vertical={false} />
-              <XAxis dataKey="id" tick={axisTickMono} axisLine={false} tickLine={false} />
-              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={44} />
+              <CartesianGrid stroke={th.chart.gridStroke} vertical={false} />
+              <XAxis dataKey="id" tick={th.chart.axisTickMono} axisLine={false} tickLine={false} />
+              <YAxis tick={th.chart.axisTick} axisLine={false} tickLine={false} width={44} />
               <Tooltip
-                cursor={{ fill: "rgba(22,22,22,0.04)" }}
+                cursor={{ fill: th.chart.cursor }}
                 content={<ChartTooltip labelFormat={(l) => `${l} · ${techniques.find((t) => t.id === l)?.name ?? ""}`} />}
               />
               <Bar dataKey="count" name="Attributed indicators" radius={[6, 6, 0, 0]} animationDuration={500}>
                 {techniques.map((t) => (
-                  <Cell key={t.id} fill={SEVERITY[toSeverity(t.severity) ?? "LOW"].solid} />
+                  <Cell key={t.id} fill={th.sev[toSeverity(t.severity) ?? "LOW"].solid} />
                 ))}
               </Bar>
             </BarChart>

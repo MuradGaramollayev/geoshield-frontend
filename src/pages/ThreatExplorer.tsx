@@ -4,7 +4,7 @@ import { fetchTimeline } from "../services/api";
 import type { TimelineEvent } from "../services/api";
 import { useAsync } from "../hooks/useAsync";
 import { EMPTY } from "../utils/empty";
-import { SEVERITY } from "../design/tokens";
+import { SEVERITY_RANK } from "../design/tokens";
 import {
   Badge, Button, Card, Drawer, EmptyState, ErrorState, KeyValue, PageHeader, SearchField, Segmented,
   SeverityBadge, SkeletonRows, Table, Th, rowClass,
@@ -53,7 +53,7 @@ export default function ThreatExplorer() {
         sortKey === "date"
           ? a.date.localeCompare(b.date)
           : sortKey === "severity"
-            ? SEVERITY[a.severity].rank - SEVERITY[b.severity].rank
+            ? SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]
             : a.title.localeCompare(b.title);
       return sortDir === "asc" ? cmp : -cmp;
     });

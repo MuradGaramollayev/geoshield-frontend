@@ -4,8 +4,9 @@ import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Globe2, Radar, ScanSearch, Server, ShieldCheck, ShieldAlert, Bug } from "lucide-react";
 import { lookupIoc } from "../services/api";
-import type { IocLookupResult } from "../services/api";
-import { SEVERITY, toSeverity } from "../design/tokens";
+import type { IocLookupResult, SourceStatus } from "../services/api";
+import { toSeverity } from "../design/tokens";
+import { useTheme } from "../design/themeContext";
 import { useMotion } from "../design/panel";
 import {
   Badge, Button, Card, CardHeader, EmptyState, ErrorState, KeyValue, MethodologyNote, PageHeader, SeverityBadge, Skeleton,
@@ -14,10 +15,36 @@ import {
 const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const IPV6 = /^[0-9a-fA-F:]+$/;
 
+/** How each source's numbers were obtained. Nothing here is ever synthesised. */
+const ORIGIN: Record<string, { label: string; tone: "positive" | "neutral" | "caution" | "info"; note: string }> = {
+  live: { label: "Live", tone: "positive", note: "Fetched from the vendor just now." },
+  cached: { label: "Cached", tone: "info", note: "A genuine earlier response from this vendor." },
+  cached_stale: { label: "Cached (stale)", tone: "caution", note: "The vendor could not be reached; showing its last genuine response." },
+  local_dataset: { label: "Local dataset", tone: "info", note: "From the bundled Shodan / GreyNoise data." },
+  rate_limited: { label: "Rate limited", tone: "caution", note: "Vendor rate limit reached and nothing cached for this IP." },
+  auth_error: { label: "Key rejected", tone: "caution", note: "The vendor rejected the configured API key." },
+  not_found: { label: "No record", tone: "neutral", note: "The vendor has no record for this IP." },
+  no_key: { label: "No API key", tone: "neutral", note: "No API key is configured for this vendor." },
+  offline: { label: "Offline", tone: "caution", note: "The backend is offline and nothing is cached for this IP." },
+  error: { label: "Unavailable", tone: "caution", note: "The vendor request failed and nothing is cached for this IP." },
+};
+
+function OriginBadge({ status }: { status?: SourceStatus }) {
+  if (!status) return <Badge>No data</Badge>;
+  const o = ORIGIN[status.source] ?? { label: status.source, tone: "neutral" as const, note: "" };
+  const age = status.age_hours !== undefined ? ` · ${status.age_hours < 1 ? "<1h" : `${Math.round(status.age_hours)}h`} old` : "";
+  return (
+    <span title={[o.note, status.detail].filter(Boolean).join(" ")}>
+      <Badge tone={o.tone}>{o.label}{age}</Badge>
+    </span>
+  );
+}
+
 function SourceCard({
   icon,
   title,
   present,
+  status,
   emptyNote,
   children,
   delay,
@@ -25,22 +52,29 @@ function SourceCard({
   icon: React.ReactNode;
   title: string;
   present: boolean;
+  status?: SourceStatus;
   emptyNote: string;
   children?: React.ReactNode;
   delay: number;
 }) {
   const m = useMotion();
+  const origin = status ? ORIGIN[status.source] : undefined;
   return (
     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: m.enter, delay, ease: m.ease }}>
       <Card className="h-full">
-        <CardHeader title={title} icon={icon} actions={present ? <Badge tone="positive">Data returned</Badge> : <Badge>No data</Badge>} className="mb-2" />
-        {present ? <div className="divide-y divide-line">{children}</div> : <p className="text-sm text-text-3 py-3">{emptyNote}</p>}
+        <CardHeader title={title} icon={icon} actions={<OriginBadge status={status} />} className="mb-2" />
+        {present ? (
+          <div className="divide-y divide-line">{children}</div>
+        ) : (
+          <p className="text-sm text-text-3 py-3">{status?.detail ?? origin?.note ?? emptyNote}</p>
+        )}
       </Card>
     </motion.div>
   );
 }
 
 export default function IocExplorer() {
+  const th = useTheme();
   // The IP being looked up lives in the URL (?ip=), so deep links and Ctrl K work.
   const [params, setParams] = useSearchParams();
   const query = params.get("ip");
@@ -66,7 +100,7 @@ export default function IocExplorer() {
   };
 
   const sev = result ? toSeverity(result.risk_level) : null;
-  const tone = sev ? SEVERITY[sev] : null;
+  const tone = sev ? th.sev[sev] : null;
   const vt = result?.virustotal;
   const vtTotal = vt ? (vt.malicious ?? 0) + (vt.suspicious ?? 0) + (vt.harmless ?? 0) : 0;
 
@@ -148,13 +182,20 @@ export default function IocExplorer() {
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <span className="code text-xl font-semibold text-ink">{result.ip}</span>
                   {sev ? <SeverityBadge severity={sev} /> : <Badge>Unknown</Badge>}
-                  {result.mode === "online" ? (
-                    <Badge tone="positive">Live vendor lookup</Badge>
+                  {result.mode === "live" ? (
+                    <span title="At least one vendor answered this lookup just now.">
+                      <Badge tone="positive">Live vendor lookup</Badge>
+                    </span>
+                  ) : result.mode === "cache" ? (
+                    <span title="Shown from genuine vendor responses cached earlier. No data is ever synthesised.">
+                      <Badge tone="info">From cached vendor data</Badge>
+                    </span>
                   ) : (
-                    <span title="Served from the backend's offline cache, not a live vendor response.">
-                      <Badge tone="caution">Offline cache</Badge>
+                    <span title="No vendor data could be obtained for this IP right now.">
+                      <Badge tone="caution">Data unavailable</Badge>
                     </span>
                   )}
+                  {result.rate_limited && <Badge tone="caution">Rate limited</Badge>}
                 </div>
                 <p className="text-base text-text-2">{result.message ?? result.recommendation}</p>
               </div>
@@ -166,13 +207,14 @@ export default function IocExplorer() {
               icon={<Globe2 size={17} />}
               title="AbuseIPDB"
               present={result.abuseipdb?.score !== undefined}
+              status={result.sources?.abuseipdb}
               emptyNote="No report returned. The IP may be unreported, or the API rate limit was hit."
               delay={0}
             >
               <KeyValue
                 label="Abuse confidence"
                 value={
-                  <span style={{ color: (result.abuseipdb.score ?? 0) >= 50 ? SEVERITY.CRITICAL.text : undefined }}>
+                  <span style={{ color: (result.abuseipdb.score ?? 0) >= 50 ? th.sev.CRITICAL.text : undefined }}>
                     {result.abuseipdb.score}%
                   </span>
                 }
@@ -194,15 +236,16 @@ export default function IocExplorer() {
               icon={<Bug size={17} />}
               title="VirusTotal"
               present={vt?.malicious !== undefined}
+              status={result.sources?.virustotal}
               emptyNote="No analysis returned. The IP may be unscanned, or the API rate limit was hit."
               delay={0.04}
             >
               {vtTotal > 0 && (
                 <div className="py-3">
                   <div className="flex h-2.5 rounded-full overflow-hidden bg-sunken">
-                    <span style={{ width: `${((vt?.malicious ?? 0) / vtTotal) * 100}%`, background: SEVERITY.CRITICAL.solid }} />
-                    <span style={{ width: `${((vt?.suspicious ?? 0) / vtTotal) * 100}%`, background: SEVERITY.MEDIUM.solid }} />
-                    <span style={{ width: `${((vt?.harmless ?? 0) / vtTotal) * 100}%`, background: SEVERITY.LOW.solid }} />
+                    <span style={{ width: `${((vt?.malicious ?? 0) / vtTotal) * 100}%`, background: th.sev.CRITICAL.solid }} />
+                    <span style={{ width: `${((vt?.suspicious ?? 0) / vtTotal) * 100}%`, background: th.sev.MEDIUM.solid }} />
+                    <span style={{ width: `${((vt?.harmless ?? 0) / vtTotal) * 100}%`, background: th.sev.LOW.solid }} />
                   </div>
                   <p className="text-xs text-text-3 mt-1.5">
                     <span className="num text-ink font-semibold">{vt?.malicious}</span> of <span className="num">{vtTotal}</span> engines flag this IP as malicious
@@ -221,6 +264,7 @@ export default function IocExplorer() {
               icon={<Server size={17} />}
               title="Shodan"
               present={!!result.shodan}
+              status={result.sources?.shodan}
               emptyNote="This IP isn't in the Shodan enrichment set."
               delay={0.08}
             >
@@ -242,7 +286,7 @@ export default function IocExplorer() {
                   <KeyValue
                     label="Exposed CVEs"
                     value={
-                      <span style={{ color: (result.shodan.vuln_count ?? 0) > 0 ? SEVERITY.CRITICAL.text : undefined }}>
+                      <span style={{ color: (result.shodan.vuln_count ?? 0) > 0 ? th.sev.CRITICAL.text : undefined }}>
                         {result.shodan.vuln_count ?? 0}
                       </span>
                     }
@@ -256,7 +300,7 @@ export default function IocExplorer() {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="code text-xs rounded-[6px] px-1.5 py-0.5 hover:underline"
-                          style={{ background: SEVERITY.CRITICAL.tint, color: SEVERITY.CRITICAL.text }}
+                          style={{ background: th.sev.CRITICAL.tint, color: th.sev.CRITICAL.text }}
                         >
                           {c}
                         </a>
@@ -271,6 +315,7 @@ export default function IocExplorer() {
               icon={<Radar size={17} />}
               title="GreyNoise"
               present={!!result.greynoise}
+              status={result.sources?.greynoise}
               emptyNote="This IP isn't in the GreyNoise enrichment set."
               delay={0.12}
             >
@@ -297,8 +342,10 @@ export default function IocExplorer() {
               High, “suspicious” to at least Medium, 1–9 exposed CVEs to at least High, and 10+ exposed CVEs to Critical.
             </p>
             <p>
-              <strong className="text-ink">Live vendor lookup</strong> means the backend queried AbuseIPDB and VirusTotal
-              just now. <strong className="text-ink">Offline cache</strong> means it answered from its local cache instead.
+              Each source carries its own origin: <strong className="text-ink">Live</strong> (fetched now),
+              <strong className="text-ink"> Cached</strong> (a genuine earlier response, with its age), or an explicit
+              reason it is missing, such as <strong className="text-ink">Rate limited</strong>. GeoShield never fills a
+              gap with generated values, so a vendor that cannot be reached shows nothing rather than a plausible number.
             </p>
           </MethodologyNote>
         </div>

@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { useCountUp } from "../../hooks/useCountUp";
 import { useMotion } from "../../design/panel";
-import { color as C } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
 import { IconTile } from "./Card";
 
 /** Animated tabular number. Pass `format` for units / separators. */
@@ -28,7 +28,7 @@ export function CountUp({
 /** Minimal area sparkline. Always fed from real series; renders a flat hairline if all zero. */
 export function Sparkline({
   data,
-  stroke = C.accent,
+  stroke,
   height = 40,
   id,
 }: {
@@ -37,20 +37,22 @@ export function Sparkline({
   height?: number;
   id: string;
 }) {
+  const th = useTheme();
+  const line = stroke ?? th.c.accent;
   return (
     <div style={{ height }} className="-mx-1">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 2, right: 2, bottom: 0, left: 2 }}>
           <defs>
             <linearGradient id={`spark-${id}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={stroke} stopOpacity={0.28} />
-              <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+              <stop offset="0%" stopColor={line} stopOpacity={0.28} />
+              <stop offset="100%" stopColor={line} stopOpacity={0} />
             </linearGradient>
           </defs>
           <Area
             type="monotone"
             dataKey="value"
-            stroke={stroke}
+            stroke={line}
             strokeWidth={1.75}
             fill={`url(#spark-${id})`}
             isAnimationActive={false}
@@ -189,7 +191,7 @@ export function MeterRow({
   label,
   value,
   max,
-  color = C.ink2,
+  color,
   mono = false,
   right,
 }: {
@@ -200,6 +202,7 @@ export function MeterRow({
   mono?: boolean;
   right?: ReactNode;
 }) {
+  const th = useTheme();
   const pct = max > 0 ? Math.max(2, (value / max) * 100) : 0;
   return (
     <div className="flex items-center gap-3">
@@ -207,7 +210,7 @@ export function MeterRow({
       <div className="flex-1 h-2 rounded-full bg-sunken overflow-hidden">
         <motion.div
           className="h-full rounded-full"
-          style={{ background: color }}
+          style={{ background: color ?? th.c.ink2 }}
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
           transition={{ duration: 0.7, ease: [0.2, 0.7, 0.2, 1] }}

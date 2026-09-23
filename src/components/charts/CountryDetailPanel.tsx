@@ -5,18 +5,20 @@ import { motion } from "framer-motion";
 import { Ban, Check, ClipboardPlus, ScanSearch, TrendingUp } from "lucide-react";
 import { createIncident, fetchCountryDetail } from "../../services/api";
 import type { CountryDetail } from "../../services/api";
-import { SEVERITY, riskColor, toSeverity } from "../../design/tokens";
+import { toSeverity } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
 import { usePanel } from "../../design/panel";
 import { getUser } from "../../utils/auth";
 import ResponseModal from "./ResponseModal";
 import { SOURCE_LABELS } from "../../design/sources";
-import { Button, CountUp, Drawer, ErrorState, MeterRow, SeverityBadge, Skeleton } from "../ui";
+import { Button, CountUp, Drawer, ErrorState, MeterRow, SeverityBadge, Skeleton, Sparkline, TrendBadge } from "../ui";
 
 
 function ScoreRing({ score }: { score: number }) {
+  const th = useTheme();
   const r = 38;
   const c = 2 * Math.PI * r;
-  const col = riskColor(score);
+  const col = th.riskColor(score);
   return (
     <div className="relative w-24 h-24 shrink-0">
       <svg viewBox="0 0 96 96" className="w-24 h-24 -rotate-90">
@@ -40,6 +42,7 @@ function ScoreRing({ score }: { score: number }) {
 /** Country drill-down, shared by both panels. Everything shown comes from /api/countries/{code}. */
 export default function CountryDetailPanel({ countryCode, onClose }: { countryCode: string | null; onClose: () => void }) {
   const panel = usePanel();
+  const th = useTheme();
   const req = useAsync<CountryDetail | null>(
     () => (countryCode ? fetchCountryDetail(countryCode) : Promise.resolve(null)),
     [countryCode],
@@ -132,10 +135,17 @@ export default function CountryDetailPanel({ countryCode, onClose }: { countryCo
           <div className="space-y-7">
             <div className="flex items-center gap-5">
               <ScoreRing score={detail.risk_score} />
-              <div className="space-y-2">
-                <SeverityBadge severity={detail.risk_level} />
+              <div className="space-y-2 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <SeverityBadge severity={detail.risk_level} />
+                  <TrendBadge trend={detail.trend} days={detail.trend_days}>
+                    {detail.trend === "insufficient"
+                      ? `${detail.trend_days}d of history`
+                      : `${detail.trend_change > 0 ? "+" : ""}${detail.trend_change} pts / ${detail.trend_days}d`}
+                  </TrendBadge>
+                </div>
                 <p className="text-sm text-text-2">
-                  Primary attack type: <span className="font-semibold text-ink">{detail.primary_attack}</span>
+                  Main activity: <span className="font-semibold text-ink">{detail.primary_attack}</span>
                 </p>
               </div>
             </div>
@@ -153,15 +163,32 @@ export default function CountryDetailPanel({ countryCode, onClose }: { countryCo
               </div>
             </div>
 
+            {detail.score_history.length > 1 && (
+              <section>
+                <h3 className="text-sm font-semibold text-ink mb-2">Recorded risk score</h3>
+                <Sparkline
+                  id={`hist-${detail.code}`}
+                  data={detail.score_history.map((p) => ({ value: p.risk_score }))}
+                  stroke={th.riskColor(detail.risk_score)}
+                  height={56}
+                />
+                <p className="text-xs text-text-3 mt-1">
+                  {detail.score_history.length} daily snapshots, {detail.score_history[0].date} to{" "}
+                  {detail.score_history[detail.score_history.length - 1].date}
+                </p>
+              </section>
+            )}
+
             <section>
               <h3 className="text-sm font-semibold text-ink mb-3">Indicators by source</h3>
               <div className="space-y-2.5">
                 {sources.map(([k, v]) => (
-                  <MeterRow key={k} label={SOURCE_LABELS[k] ?? k} value={v} max={maxSource} color={sev ? SEVERITY[sev].solid : undefined} />
+                  <MeterRow key={k} label={SOURCE_LABELS[k] ?? k} value={v} max={maxSource} color={sev ? th.sev[sev].solid : undefined} />
                 ))}
               </div>
+              <p className="text-xs text-text-3 mt-2.5">{detail.primary_attack_basis}</p>
               {detail.sources.phishtank > detail.total_threats && (
-                <p className="text-xs text-text-3 mt-2">PhishTank counts phishing URLs and is reported separately from the indicator total.</p>
+                <p className="text-xs text-text-3 mt-1">PhishTank counts phishing URLs and is reported separately from the indicator total.</p>
               )}
             </section>
 

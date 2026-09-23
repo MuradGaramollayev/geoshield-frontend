@@ -4,12 +4,14 @@ import {
   BarChart3, Bell, BookOpen, ClipboardList, Clock, FileText, Grid3x3, Home, Plug, ScanSearch, Settings, ShieldAlert,
 } from "lucide-react";
 import { PanelContext } from "../../design/panel";
+import { ThemeProvider } from "../../design/theme";
 import { LogoLockup } from "../brand/Logo";
 import CopilotPanel from "../common/CopilotPanel";
 import { CommandPalette } from "./CommandPalette";
 import { usePaletteHotkey } from "../../hooks/usePaletteHotkey";
 import type { PaletteNavItem } from "./CommandPalette";
 import { AlertsBell, SearchTrigger, StatusPill, UserChip } from "./TopbarStatus";
+import { ThemeToggle } from "./ThemeToggle";
 import { ShellDataProvider } from "./ShellDataProvider";
 
 const ANALYST_NAV: PaletteNavItem[] = [
@@ -75,6 +77,7 @@ export default function AnalystShell() {
 
   return (
     <PanelContext.Provider value="analyst">
+      <ThemeProvider panel="analyst">
       <ShellDataProvider>
         <div data-panel="analyst" className="h-screen bg-canvas p-1.5 flex">
           <div className="flex-1 min-w-0 flex flex-col rounded-[20px] bg-surface shadow-[var(--shadow-e1)] overflow-hidden">
@@ -89,6 +92,7 @@ export default function AnalystShell() {
                 </div>
               </div>
               <StatusPill />
+              <ThemeToggle />
               <AlertsBell to="/analyst/alerts" />
               <UserChip settingsPath="/analyst/settings" />
             </header>
@@ -109,6 +113,7 @@ export default function AnalystShell() {
           />
         </div>
       </ShellDataProvider>
+      </ThemeProvider>
     </PanelContext.Provider>
   );
 }

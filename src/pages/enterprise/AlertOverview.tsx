@@ -3,14 +3,15 @@ import { Link } from "react-router-dom";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { buildSparkline, fetchIncidents, fetchTimeline, formatAsOf } from "../../services/api";
 import { useAsync } from "../../hooks/useAsync";
-import { SEVERITY, SEVERITY_ORDER, color as C } from "../../design/tokens";
+import { SEVERITY_ORDER } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
 import { ChartTooltip } from "../../design/ChartTooltip";
-import { axisTick, gridStroke } from "../../design/chart";
 import { Card, CardHeader, ErrorState, MethodologyNote, PageHeader, SegmentGauge, SkeletonCard, TrendBadge } from "../../components/ui";
 
 const OPEN = new Set(["NEW", "ASSIGNED", "INVESTIGATING"]);
 
 export default function AlertOverview() {
+  const th = useTheme();
   const { data, error, loading, reload } = useAsync(() => Promise.all([fetchIncidents(), fetchTimeline(30)]), []);
   const [inc, tl] = data ?? [null, null];
 
@@ -53,15 +54,15 @@ export default function AlertOverview() {
               <CardHeader title="Open alerts by severity" description="Incidents not yet resolved" />
               <SegmentGauge
                 size={260}
-                segments={counts.filter((c) => c.n > 0).map((c) => ({ value: c.n, color: SEVERITY[c.s].solid, label: SEVERITY[c.s].label }))}
+                segments={counts.filter((c) => c.n > 0).map((c) => ({ value: c.n, color: th.sev[c.s].solid, label: th.sev[c.s].label }))}
                 center={open.length}
                 caption="open alerts"
               />
               <ul className="mt-4 space-y-3">
                 {counts.map(({ s, n }) => (
                   <li key={s} className="flex items-center gap-3">
-                    <span className="w-3 h-3 rounded-[4px]" style={{ background: SEVERITY[s].solid }} />
-                    <span className="flex-1 text-base text-text-2">{SEVERITY[s].label}</span>
+                    <span className="w-3 h-3 rounded-[4px]" style={{ background: th.sev[s].solid }} />
+                    <span className="flex-1 text-base text-text-2">{th.sev[s].label}</span>
                     <span className="num text-xl text-ink">{n}</span>
                   </li>
                 ))}
@@ -85,15 +86,15 @@ export default function AlertOverview() {
                 <AreaChart data={series} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="ao-fill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.accent} stopOpacity={0.3} />
-                      <stop offset="100%" stopColor={C.accent} stopOpacity={0} />
+                      <stop offset="0%" stopColor={th.c.accent} stopOpacity={0.3} />
+                      <stop offset="100%" stopColor={th.c.accent} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis dataKey="date" tick={axisTick} axisLine={false} tickLine={false} interval={4} />
-                  <YAxis tick={axisTick} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
+                  <CartesianGrid stroke={th.chart.gridStroke} vertical={false} />
+                  <XAxis dataKey="date" tick={th.chart.axisTick} axisLine={false} tickLine={false} interval={4} />
+                  <YAxis tick={th.chart.axisTick} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
                   <Tooltip content={<ChartTooltip />} />
-                  <Area type="monotone" dataKey="count" name="Events" stroke={C.accent} strokeWidth={2} fill="url(#ao-fill)" animationDuration={700} />
+                  <Area type="monotone" dataKey="count" name="Events" stroke={th.c.accent} strokeWidth={2} fill="url(#ao-fill)" animationDuration={700} />
                 </AreaChart>
               </ResponsiveContainer>
             </Card>
@@ -111,9 +112,9 @@ export default function AlertOverview() {
               <ResponsiveContainer width="100%" height={Math.max(140, categories.length * 44)}>
                 <BarChart data={categories} layout="vertical" margin={{ left: 0, right: 16 }} barCategoryGap={12}>
                   <XAxis type="number" hide allowDecimals={false} />
-                  <YAxis type="category" dataKey="name" tick={{ ...axisTick, fontSize: 13, fill: C.text2 }} width={110} axisLine={false} tickLine={false} />
-                  <Tooltip cursor={{ fill: "rgba(22,22,22,0.04)" }} content={<ChartTooltip />} />
-                  <Bar dataKey="count" name="Open alerts" fill={C.ink2} radius={[0, 8, 8, 0]} animationDuration={600} />
+                  <YAxis type="category" dataKey="name" tick={{ ...th.chart.axisTick, fontSize: 13, fill: th.c.text2 }} width={110} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: th.chart.cursor }} content={<ChartTooltip />} />
+                  <Bar dataKey="count" name="Open alerts" fill={th.c.ink2} radius={[0, 8, 8, 0]} animationDuration={600} />
                 </BarChart>
               </ResponsiveContainer>
             )}

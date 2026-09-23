@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
-import { SEVERITY, toSeverity } from "../../design/tokens";
+import { ArrowDownRight, ArrowUpRight, Hourglass, Minus } from "lucide-react";
+import { toSeverity } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
 import { usePanel } from "../../design/panel";
 
 /**
@@ -17,6 +18,7 @@ export function SeverityBadge({
   size?: "xs" | "sm";
 }) {
   const panel = usePanel();
+  const th = useTheme();
   const sev = toSeverity(severity);
   if (!sev) {
     return (
@@ -25,7 +27,7 @@ export function SeverityBadge({
       </span>
     );
   }
-  const s = SEVERITY[sev];
+  const s = th.sev[sev];
   const mode = variant ?? (panel === "enterprise" ? "tint" : "solid");
   const style = mode === "solid" ? { background: s.solid, color: s.on } : { background: s.tint, color: s.text };
   const pad = size === "xs" ? "px-1.5 py-px text-[10px]" : "px-2 py-0.5 text-2xs";
@@ -41,8 +43,9 @@ export function SeverityBadge({
 
 /** Small coloured dot used in legends and dense rows. */
 export function SeverityDot({ severity, className = "" }: { severity: string; className?: string }) {
+  const th = useTheme();
   const sev = toSeverity(severity);
-  const bg = sev ? SEVERITY[sev].solid : "#A3A3A3";
+  const bg = sev ? th.sev[sev].solid : th.c.text4;
   return <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${className}`} style={{ background: bg }} />;
 }
 
@@ -71,8 +74,16 @@ export function Badge({ tone = "neutral", children, icon }: { tone?: Tone; child
  * Direction-of-risk badge. For threat metrics "up" is bad, so it is tinted
  * with the accent; "down" is positive.
  */
-export function TrendBadge({ trend, children }: { trend: string; children?: ReactNode }) {
+export function TrendBadge({ trend, days, children }: { trend: string; days?: number; children?: ReactNode }) {
   const t = trend?.toLowerCase();
+  if (t === "insufficient")
+    return (
+      <span title={`Trend needs at least 2 daily snapshots; ${days ?? 0} recorded so far.`}>
+        <Badge tone="neutral" icon={<Hourglass size={11} strokeWidth={2.5} />}>
+          {children ?? `Trend: ${days ?? 0}d of data`}
+        </Badge>
+      </span>
+    );
   if (t === "up")
     return <Badge tone="accent" icon={<ArrowUpRight size={11} strokeWidth={2.5} />}>{children ?? "Rising"}</Badge>;
   if (t === "down")

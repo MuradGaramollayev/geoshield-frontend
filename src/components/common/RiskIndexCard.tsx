@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
-import { SEVERITY, riskColor, severityForScore } from "../../design/tokens";
+import { severityForScore } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
 import { useMotion } from "../../design/panel";
 import { formatAsOf } from "../../services/api";
 import type { StatusData } from "../../services/api";
@@ -10,6 +11,7 @@ import { CountUp, SeverityBadge } from "../ui";
  * country scores; the band uses the same thresholds as country severity.
  */
 export default function RiskIndexCard({ status }: { status: StatusData }) {
+  const th = useTheme();
   const m = useMotion();
   const enterprise = m.panel === "enterprise";
   const score = status.data.avg_risk;
@@ -29,7 +31,7 @@ export default function RiskIndexCard({ status }: { status: StatusData }) {
         <svg viewBox={`0 0 ${size} ${size}`} className="-rotate-90" style={{ width: size, height: size }}>
           <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-sunken)" strokeWidth={enterprise ? 12 : 10} />
           <motion.circle
-            cx={size / 2} cy={size / 2} r={r} fill="none" stroke={riskColor(score)} strokeWidth={enterprise ? 12 : 10} strokeLinecap="round"
+            cx={size / 2} cy={size / 2} r={r} fill="none" stroke={th.riskColor(score)} strokeWidth={enterprise ? 12 : 10} strokeLinecap="round"
             strokeDasharray={c}
             initial={{ strokeDashoffset: c }}
             animate={{ strokeDashoffset: c * (1 - score / 100) }}
@@ -44,8 +46,8 @@ export default function RiskIndexCard({ status }: { status: StatusData }) {
 
       <div className="flex-1 min-w-[240px]">
         <p className={`text-text-2 ${enterprise ? "text-md" : "text-sm"} mb-1`}>{enterprise ? "Global risk exposure" : "Global cyber risk index"}</p>
-        <p className={`font-semibold tracking-[-0.02em] ${enterprise ? "text-3xl" : "text-2xl"}`} style={{ color: SEVERITY[sev].text }}>
-          {SEVERITY[sev].label} risk
+        <p className={`font-semibold tracking-[-0.02em] ${enterprise ? "text-3xl" : "text-2xl"}`} style={{ color: th.sev[sev].text }}>
+          {th.sev[sev].label} risk
         </p>
         <div className="flex flex-wrap items-center gap-2 mt-3">
           <SeverityBadge severity={sev} />
@@ -59,8 +61,8 @@ export default function RiskIndexCard({ status }: { status: StatusData }) {
         {[
           { v: status.data.total_threats, l: "Threat indicators" },
           { v: status.data.countries, l: "Countries monitored" },
-          { v: status.data.critical, l: "Critical countries", tone: SEVERITY.CRITICAL.text },
-          { v: status.data.high, l: "High-risk countries", tone: SEVERITY.HIGH.text },
+          { v: status.data.critical, l: "Critical countries", tone: th.sev.CRITICAL.text },
+          { v: status.data.high, l: "High-risk countries", tone: th.sev.HIGH.text },
         ].map((k) => (
           <div key={k.l}>
             <dd className={`num font-medium tracking-[-0.03em] ${enterprise ? "text-2xl" : "text-xl"}`} style={{ color: k.tone ?? "var(--color-ink)" }}>

@@ -1,15 +1,11 @@
 import { Link } from "react-router-dom";
+import { LogoLockup } from "../brand/Logo";
 
 export default function Footer() {
   return (
     <footer className="border-t border-slate-800 py-12 px-6">
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
-        <span
-          className="font-mono font-bold text-white tracking-wider text-base"
-          style={{ textShadow: "0 0 12px rgba(16, 185, 129, 0.35)" }}
-        >
-          GEOSHIELD
-        </span>
+        <LogoLockup size={26} variant="white" />
 
         <div className="flex items-center gap-6 text-sm text-slate-500">
           <a href="#features" className="hover:text-slate-300 transition-colors">Product</a>

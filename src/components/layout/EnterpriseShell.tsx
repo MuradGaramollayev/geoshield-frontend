@@ -4,12 +4,14 @@ import {
   BarChart3, Bell, BookOpen, FileText, LayoutDashboard, Package, Plug, Settings, ShieldCheck, TrendingUp, Users,
 } from "lucide-react";
 import { PanelContext } from "../../design/panel";
+import { ThemeProvider } from "../../design/theme";
 import { LogoLockup } from "../brand/Logo";
 import EnterpriseAdvisorPanel from "../enterprise/EnterpriseAdvisorPanel";
 import { CommandPalette } from "./CommandPalette";
 import { usePaletteHotkey } from "../../hooks/usePaletteHotkey";
 import type { PaletteNavItem } from "./CommandPalette";
 import { AlertsBell, SearchTrigger, StatusPill, UserChip } from "./TopbarStatus";
+import { ThemeToggle } from "./ThemeToggle";
 import { ShellDataProvider } from "./ShellDataProvider";
 
 const ENTERPRISE_NAV: PaletteNavItem[] = [
@@ -73,6 +75,7 @@ export default function EnterpriseShell() {
 
   return (
     <PanelContext.Provider value="enterprise">
+      <ThemeProvider panel="enterprise">
       <ShellDataProvider>
         <div data-panel="enterprise" className="h-screen bg-canvas p-2.5 flex">
           <div className="flex-1 min-w-0 flex rounded-[28px] bg-surface shadow-[var(--shadow-e1)] overflow-hidden">
@@ -81,6 +84,7 @@ export default function EnterpriseShell() {
               <header className="h-[76px] shrink-0 flex items-center justify-end gap-3 px-8">
                 <SearchTrigger onOpen={() => setPaletteOpen(true)} placeholder="Search reports, countries…" />
                 <StatusPill />
+                <ThemeToggle />
                 <AlertsBell to="/enterprise/alerts" />
                 <UserChip settingsPath="/enterprise/settings" />
               </header>
@@ -100,6 +104,7 @@ export default function EnterpriseShell() {
           />
         </div>
       </ShellDataProvider>
+      </ThemeProvider>
     </PanelContext.Provider>
   );
 }

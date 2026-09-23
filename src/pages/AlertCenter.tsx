@@ -6,7 +6,8 @@ import {
 } from "../services/api";
 import type { EscalationPolicy, Incident, RoutingConfig } from "../services/api";
 import { useAsync } from "../hooks/useAsync";
-import { SEVERITY, SEVERITY_ORDER } from "../design/tokens";
+import { SEVERITY_ORDER, SEVERITY_RANK } from "../design/tokens";
+import { useTheme } from "../design/themeContext";
 import { useMotion } from "../design/panel";
 import { formatTs, relativeTs } from "../utils/time";
 import { getUser } from "../utils/auth";
@@ -18,6 +19,7 @@ import {
 const OPEN = new Set(["NEW", "ASSIGNED", "INVESTIGATING"]);
 
 export default function AlertCenter() {
+  const th = useTheme();
   const inc = useAsync(fetchIncidents, []);
   const esc = useAsync(fetchEscalation, []);
   const routingState = useAsync(fetchRouting, []);
@@ -33,7 +35,7 @@ export default function AlertCenter() {
     () =>
       (inc.data?.incidents ?? [])
         .filter((i) => OPEN.has(i.status))
-        .sort((a, b) => SEVERITY[b.severity].rank - SEVERITY[a.severity].rank || b.created_at.localeCompare(a.created_at)),
+        .sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || b.created_at.localeCompare(a.created_at)),
     [inc.data],
   );
   const counts = SEVERITY_ORDER.map((s) => ({ s, n: open.filter((i) => i.severity === s).length }));
@@ -71,10 +73,10 @@ export default function AlertCenter() {
             transition={{ duration: m.enter, delay: i * m.stagger }}
             className="e2 p-4 flex items-center gap-4"
           >
-            <span className="w-2 self-stretch rounded-full" style={{ background: SEVERITY[s].solid }} />
+            <span className="w-2 self-stretch rounded-full" style={{ background: th.sev[s].solid }} />
             <div>
               <p className="num text-2xl font-medium tracking-[-0.03em] text-ink">{inc.loading ? "–" : n}</p>
-              <p className="text-sm text-text-2">{SEVERITY[s].label}</p>
+              <p className="text-sm text-text-2">{th.sev[s].label}</p>
             </div>
           </motion.div>
         ))}
@@ -103,7 +105,7 @@ export default function AlertCenter() {
                 transition={{ duration: m.enter, delay: idx * m.stagger }}
                 className="e2 relative overflow-hidden p-4 pl-5"
               >
-                <span className="absolute left-0 inset-y-0 w-1.5" style={{ background: SEVERITY[i.severity].solid }} />
+                <span className="absolute left-0 inset-y-0 w-1.5" style={{ background: th.sev[i.severity].solid }} />
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
                   <span className="code text-xs font-semibold text-ink">{i.id}</span>
                   <SeverityBadge severity={i.severity} />

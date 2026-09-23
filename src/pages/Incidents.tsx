@@ -4,7 +4,8 @@ import { Globe2, GripVertical, Inbox, User } from "lucide-react";
 import { fetchIncidents, updateIncident } from "../services/api";
 import type { Incident } from "../services/api";
 import { useAsync } from "../hooks/useAsync";
-import { SEVERITY, toSeverity } from "../design/tokens";
+import { SEVERITY_RANK, toSeverity } from "../design/tokens";
+import { useTheme } from "../design/themeContext";
 import { useMotion } from "../design/panel";
 import { formatTs, relativeTs } from "../utils/time";
 import { getUser } from "../utils/auth";
@@ -21,6 +22,7 @@ const STATUS_LABEL: Record<Incident["status"], string> = {
 };
 
 export default function Incidents() {
+  const th = useTheme();
   const { data, error, loading, reload, setData } = useAsync(fetchIncidents, []);
   const incidents = data?.incidents ?? [];
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -88,7 +90,7 @@ export default function Incidents() {
           {STATUSES.map((status) => {
             const col = incidents
               .filter((i) => i.status === status)
-              .sort((a, b) => (SEVERITY[b.severity]?.rank ?? 0) - (SEVERITY[a.severity]?.rank ?? 0));
+              .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0));
             const over = dragOver === status;
             return (
               <section
@@ -137,7 +139,7 @@ export default function Incidents() {
                         onClick={() => setSelectedId(inc.id)}
                         className="group relative w-full text-left e3 p-3 pl-4 overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-[var(--shadow-e2-hover)] interactive"
                       >
-                        <span className="absolute left-0 inset-y-0 w-1" style={{ background: sev ? SEVERITY[sev].solid : undefined }} />
+                        <span className="absolute left-0 inset-y-0 w-1" style={{ background: sev ? th.sev[sev].solid : undefined }} />
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="code text-xs font-semibold text-ink">{inc.id}</span>
                           <span className="flex items-center gap-1">

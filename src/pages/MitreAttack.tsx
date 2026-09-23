@@ -3,12 +3,14 @@ import { Grid3x3, Layers, ShieldAlert, Database } from "lucide-react";
 import { fetchMitreMatrix, fetchMitreTechnique } from "../services/api";
 import type { MitreTechnique } from "../services/api";
 import { useAsync } from "../hooks/useAsync";
-import { SEVERITY, toSeverity } from "../design/tokens";
+import { toSeverity } from "../design/tokens";
+import { useTheme } from "../design/themeContext";
 import {
   Card, ErrorState, MethodologyNote, Modal, PageHeader, SeverityBadge, Skeleton, SkeletonCard, StatTile,
 } from "../components/ui";
 
 export default function MitreAttack() {
+  const th = useTheme();
   const { data: matrix, error, loading, reload } = useAsync(fetchMitreMatrix, []);
   const [selected, setSelected] = useState<MitreTechnique | null>(null);
   const detail = useAsync(
@@ -45,7 +47,7 @@ export default function MitreAttack() {
                   icon={<ShieldAlert size={16} />}
                   label="High or critical techniques"
                   value={highSev}
-                  valueTone={highSev > 0 ? SEVERITY.CRITICAL.text : undefined}
+                  valueTone={highSev > 0 ? th.sev.CRITICAL.text : undefined}
                   delay={0.06}
                 />
                 <StatTile icon={<Database size={16} />} label="Indicators attributed" value={matrix.total_mapped} delay={0.09} />
@@ -81,7 +83,7 @@ export default function MitreAttack() {
                               >
                                 <span
                                   className="absolute left-0 top-0 bottom-0 w-[4px]"
-                                  style={{ background: sev ? SEVERITY[sev].solid : undefined }}
+                                  style={{ background: sev ? th.sev[sev].solid : undefined }}
                                   aria-hidden="true"
                                 />
                                 <p className="code text-2xs text-text-3 mb-0.5">{tech.id}</p>

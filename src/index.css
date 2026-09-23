@@ -134,29 +134,69 @@
   --gap-grid: 1.5rem;
 }
 
-/* ── Dark scope: same semantic tokens, remapped (landing, map overlays) ─ */
-.theme-dark {
-  --color-canvas: #040B10;
-  --color-surface: #07131A;
-  --color-sunken: #0B1C25;
-  --color-well: #13262F;
-  --color-paper: #0F222C;
-  --color-line: rgba(255, 255, 255, 0.08);
-  --color-line-strong: rgba(255, 255, 255, 0.16);
-  --color-ink: #F3F5F4;
+/* ── Dark theme ───────────────────────────────────────────────────
+   Same token names, dark values. Set by ThemeProvider as data-theme="dark"
+   on <html>, so portalled overlays inherit it. Values mirror DARK in
+   src/design/tokens.ts. */
+[data-theme="dark"] {
+  --color-canvas: #080C0F;
+  --color-surface: #121619;
+  --color-sunken: #1B2024;
+  --color-well: #252B30;
+  --color-paper: #1E2428;
+  --color-line: #2A3136;
+  --color-line-strong: #3A4248;
+
+  --color-ink: #F4F5F5;
   --color-ink-2: #FFFFFF;
-  --color-text-2: #B4C0C4;
-  --color-text-3: #8A9AA0;
-  --color-text-4: #5D6E75;
-  --color-accent-ink: #FF8A63;
-  --color-accent-100: rgba(252, 88, 42, 0.14);
-  --color-accent-200: rgba(252, 88, 42, 0.24);
-  --shadow-e2: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.07),
-               0 18px 40px -24px rgba(0, 0, 0, 0.8);
-  --shadow-e2-hover: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 0 0 1px rgba(255, 255, 255, 0.14),
-               0 24px 48px -24px rgba(0, 0, 0, 0.9);
-  --shadow-e3: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.09);
-  color: var(--color-ink);
+  --color-text-2: #B7BEC3;
+  --color-text-3: #8D969C;
+  --color-text-4: #666E74;
+
+  --color-accent: #FF6A3D;
+  --color-accent-strong: #FF854F;
+  --color-accent-ink: #FF9068;
+  --color-accent-300: #C2603F;
+  --color-accent-200: #6A3526;
+  --color-accent-100: #39211A;
+
+  --color-positive: #47B98C;
+  --color-positive-tint: #123024;
+  --color-caution: #E0B15E;
+  --color-caution-tint: #33280F;
+  --color-info: #3FA9B8;
+  --color-info-tint: #102C31;
+  --color-violet: #A177DB;
+  --color-violet-tint: #241935;
+
+  --color-sev-critical: #E03755;
+  --color-sev-critical-on: #FFFFFF;
+  --color-sev-critical-tint: #3A1420;
+  --color-sev-critical-text: #FF8098;
+  --color-sev-high: #FF6A3D;
+  --color-sev-high-on: #1A0A04;
+  --color-sev-high-tint: #3B1D12;
+  --color-sev-high-text: #FF9A72;
+  --color-sev-medium: #F0AE43;
+  --color-sev-medium-on: #1F1405;
+  --color-sev-medium-tint: #35280F;
+  --color-sev-medium-text: #F3C173;
+  --color-sev-low: #35A97C;
+  --color-sev-low-on: #04120C;
+  --color-sev-low-tint: #123024;
+  --color-sev-low-text: #5FC79B;
+
+  /* Depth in dark comes from a light top edge and a deeper drop shadow,
+     not from a white rim. */
+  --shadow-e1: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.5);
+  --shadow-e2: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(255, 255, 255, 0.06),
+               0 2px 4px rgba(0, 0, 0, 0.35), 0 14px 32px -18px rgba(0, 0, 0, 0.85);
+  --shadow-e2-hover: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 0 0 1px rgba(255, 255, 255, 0.12),
+               0 4px 8px rgba(0, 0, 0, 0.4), 0 22px 44px -20px rgba(0, 0, 0, 0.95);
+  --shadow-e3: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.07),
+               0 2px 6px -2px rgba(0, 0, 0, 0.5);
+  --shadow-e4: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 28px 70px -22px rgba(0, 0, 0, 0.95),
+               0 10px 24px -12px rgba(0, 0, 0, 0.7);
 }
 
 /* ── Base ──────────────────────────────────────────────────────── */
@@ -221,8 +261,8 @@
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-e4);
   }
-  .theme-dark .e4 {
-    background: rgba(8, 20, 28, 0.8);
+  [data-theme="dark"] .e4 {
+    background: rgba(24, 30, 34, 0.82);
   }
 
   .interactive {
@@ -233,6 +273,8 @@
       border-color var(--dur) var(--ease-out-soft),
       color var(--dur) var(--ease-out-soft);
   }
+  [data-theme="dark"] .e2 { background: var(--color-paper); }
+  [data-theme="dark"] .e1 { background: var(--color-surface); }
   .e2.interactive:hover {
     box-shadow: var(--shadow-e2-hover);
     transform: translateY(-2px);

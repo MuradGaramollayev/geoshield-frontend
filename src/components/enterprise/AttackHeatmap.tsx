@@ -3,18 +3,18 @@ import { motion } from "framer-motion";
 import { buildHeatmapData, fetchTimeline, formatAsOf } from "../../services/api";
 import type { HeatmapCell } from "../../services/api";
 import { useAsync } from "../../hooks/useAsync";
-import { color as C } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
 import { Card, CardHeader, ErrorState, SkeletonCard } from "../ui";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKS = 4;
 
-// Warm single-hue ramp from the reference donut: empty → accent.
-const RAMP = [C.sunken, C.accent100, C.accent200, C.accent300, C.accent];
-
 export default function AttackHeatmap() {
+  const th = useTheme();
   const { data, error, loading, reload } = useAsync(() => fetchTimeline(WEEKS * 7 + 7), []);
   const [hover, setHover] = useState<HeatmapCell | null>(null);
+  // Warm single-hue ramp from the reference donut: empty -> accent.
+  const RAMP = [th.c.sunken, th.c.accent100, th.c.accent200, th.c.accent300, th.c.accent];
 
   if (loading) return <SkeletonCard tall />;
   if (error) return <ErrorState message={error} onRetry={reload} />;

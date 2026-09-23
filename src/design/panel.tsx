@@ -2,6 +2,13 @@ import { createContext, useContext } from "react";
 
 export type Panel = "analyst" | "enterprise" | "public";
 
+/** Theme defaults: the Analyst console is dark, Enterprise and public pages light. */
+export const DEFAULT_THEME: Record<Panel, "light" | "dark"> = {
+  analyst: "dark",
+  enterprise: "light",
+  public: "light",
+};
+
 export const PanelContext = createContext<Panel>("public");
 
 export function usePanel(): Panel {

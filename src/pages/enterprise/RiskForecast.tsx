@@ -5,9 +5,8 @@ import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip,
 import { AlertTriangle, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { fetchCountries, fetchCountryForecast, fetchGlobalForecast } from "../../services/api";
 import type { CountryRisk, ForecastResult } from "../../services/api";
-import { color as C } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
 import { ChartTooltip } from "../../design/ChartTooltip";
-import { axisTick, gridStroke } from "../../design/chart";
 import {
   Card, CardHeader, ErrorState, MethodologyNote, PageHeader, SelectField, SkeletonCard,
 } from "../../components/ui";
@@ -19,6 +18,7 @@ const TREND = {
 };
 
 export default function RiskForecast() {
+  const th = useTheme();
   const [countries, setCountries] = useState<CountryRisk[]>([]);
   const [params] = useSearchParams();
   const [selectedCode, setSelectedCode] = useState<string>(params.get("country") ?? "GLOBAL");
@@ -99,9 +99,9 @@ export default function RiskForecast() {
             <CardHeader title="30-day history and 7-day projection" description="Daily event count" />
             <ResponsiveContainer width="100%" height={340}>
               <ComposedChart data={chartData} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
-                <CartesianGrid stroke={gridStroke} vertical={false} />
-                <XAxis dataKey="date" tick={axisTick} axisLine={false} tickLine={false} interval={4} />
-                <YAxis tick={axisTick} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
+                <CartesianGrid stroke={th.chart.gridStroke} vertical={false} />
+                <XAxis dataKey="date" tick={th.chart.axisTick} axisLine={false} tickLine={false} interval={4} />
+                <YAxis tick={th.chart.axisTick} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
                 <Tooltip
                   content={
                     <ChartTooltip
@@ -109,9 +109,9 @@ export default function RiskForecast() {
                     />
                   }
                 />
-                <Area type="monotone" dataKey="band" name="Confidence band" stroke="none" fill={C.accent} fillOpacity={0.14} isAnimationActive={false} />
-                <Line type="monotone" dataKey="actual" name="Recorded events" stroke={C.ink2} strokeWidth={2} dot={false} connectNulls={false} />
-                <Line type="monotone" dataKey="predicted" name="Projected events" stroke={C.accent} strokeWidth={2.25} strokeDasharray="6 5" dot={false} connectNulls={false} />
+                <Area type="monotone" dataKey="band" name="Confidence band" stroke="none" fill={th.c.accent} fillOpacity={0.14} isAnimationActive={false} />
+                <Line type="monotone" dataKey="actual" name="Recorded events" stroke={th.c.ink2} strokeWidth={2} dot={false} connectNulls={false} />
+                <Line type="monotone" dataKey="predicted" name="Projected events" stroke={th.c.accent} strokeWidth={2.25} strokeDasharray="6 5" dot={false} connectNulls={false} />
               </ComposedChart>
             </ResponsiveContainer>
             <div className="flex flex-wrap items-center gap-6 mt-4 text-sm text-text-2">

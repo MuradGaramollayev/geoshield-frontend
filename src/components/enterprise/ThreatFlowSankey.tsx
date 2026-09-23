@@ -2,7 +2,8 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { fetchCountries } from "../../services/api";
 import { useAsync } from "../../hooks/useAsync";
-import { SEVERITY, SEVERITY_ORDER, toSeverity, color as C } from "../../design/tokens";
+import { SEVERITY_ORDER, toSeverity } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
 import { Card, CardHeader, ErrorState, SkeletonCard } from "../ui";
 
 const TOP_N = 10;
@@ -17,6 +18,7 @@ const LINK_W = 110;
  * (not inferred from the first country in a group).
  */
 export default function ThreatFlowSankey() {
+  const th = useTheme();
   const { data, error, loading, reload } = useAsync(fetchCountries, []);
   const [hover, setHover] = useState<string | null>(null);
   if (loading) return <SkeletonCard tall />;
@@ -55,7 +57,7 @@ export default function ThreatFlowSankey() {
               <motion.path
                 key={`cv-${c.code}`}
                 d={curve(x1, yOf(i, top.length), x2, yOf(vi, vectors.length))}
-                stroke={SEVERITY[sev].solid}
+                stroke={th.sev[sev].solid}
                 strokeWidth={hover === c.code ? 5 : 3}
                 fill="none"
                 initial={{ pathLength: 0 }}
@@ -71,7 +73,7 @@ export default function ThreatFlowSankey() {
               <motion.path
                 key={`vl-${k}`}
                 d={curve(x3, yOf(vectors.indexOf(v), vectors.length), x4, yOf(levels.indexOf(sev), levels.length))}
-                stroke={SEVERITY[sev].solid}
+                stroke={th.sev[sev].solid}
                 strokeWidth={2 + n * 2}
                 fill="none"
                 initial={{ pathLength: 0 }}
@@ -85,9 +87,9 @@ export default function ThreatFlowSankey() {
             const y = yOf(i, top.length) - NODE_H / 2;
             return (
               <g key={c.code} onMouseEnter={() => setHover(c.code)} onMouseLeave={() => setHover(null)} className="cursor-default">
-                <rect x={0} y={y} width={COL_W} height={NODE_H} rx={10} fill={C.paper} stroke={C.line} />
-                <text x={12} y={y + NODE_H / 2 + 4} fontSize={13} fontWeight={600} fill={C.ink}>{c.name}</text>
-                <text x={COL_W - 12} y={y + NODE_H / 2 + 4} fontSize={12} textAnchor="end" fill={C.text2} className="num">{c.risk_score}</text>
+                <rect x={0} y={y} width={COL_W} height={NODE_H} rx={10} fill={th.c.paper} stroke={th.c.line} />
+                <text x={12} y={y + NODE_H / 2 + 4} fontSize={13} fontWeight={600} fill={th.c.ink}>{c.name}</text>
+                <text x={COL_W - 12} y={y + NODE_H / 2 + 4} fontSize={12} textAnchor="end" fill={th.c.text2} className="num">{c.risk_score}</text>
               </g>
             );
           })}
@@ -95,8 +97,8 @@ export default function ThreatFlowSankey() {
             const y = yOf(i, vectors.length) - NODE_H / 2;
             return (
               <g key={v} onMouseEnter={() => setHover(`v-${v}`)} onMouseLeave={() => setHover(null)}>
-                <rect x={x2} y={y} width={COL_W} height={NODE_H} rx={10} fill={C.ink2} />
-                <text x={x2 + COL_W / 2} y={y + NODE_H / 2 + 4} fontSize={13} fontWeight={600} textAnchor="middle" fill={C.paper}>{v}</text>
+                <rect x={x2} y={y} width={COL_W} height={NODE_H} rx={10} fill={th.c.ink2} />
+                <text x={x2 + COL_W / 2} y={y + NODE_H / 2 + 4} fontSize={13} fontWeight={600} textAnchor="middle" fill={th.c.paper}>{v}</text>
               </g>
             );
           })}
@@ -104,9 +106,9 @@ export default function ThreatFlowSankey() {
             const y = yOf(i, levels.length) - NODE_H / 2;
             return (
               <g key={l}>
-                <rect x={x4} y={y} width={COL_W} height={NODE_H} rx={10} fill={SEVERITY[l].tint} />
-                <text x={x4 + COL_W / 2} y={y + NODE_H / 2 + 4} fontSize={13} fontWeight={700} textAnchor="middle" fill={SEVERITY[l].text}>
-                  {SEVERITY[l].label} · {top.filter((c) => c.risk_level === l).length}
+                <rect x={x4} y={y} width={COL_W} height={NODE_H} rx={10} fill={th.sev[l].tint} />
+                <text x={x4 + COL_W / 2} y={y + NODE_H / 2 + 4} fontSize={13} fontWeight={700} textAnchor="middle" fill={th.sev[l].text}>
+                  {th.sev[l].label} · {top.filter((c) => c.risk_level === l).length}
                 </text>
               </g>
             );

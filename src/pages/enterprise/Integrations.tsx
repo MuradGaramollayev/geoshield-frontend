@@ -2,9 +2,10 @@ import { fetchRouting } from "../../services/api";
 import { useAsync } from "../../hooks/useAsync";
 import IntegrationsCatalog from "../../components/common/IntegrationsCatalog";
 import { Card, ErrorState, PageHeader, SegmentGauge, SkeletonCard } from "../../components/ui";
-import { color as C } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
 
 export default function EnterpriseIntegrations() {
+  const th = useTheme();
   const { data, error, loading, reload } = useAsync(fetchRouting, []);
   const on = data?.integrations.filter((i) => i.connected).length ?? 0;
   const total = data?.integrations.length ?? 0;
@@ -26,8 +27,8 @@ export default function EnterpriseIntegrations() {
             <SegmentGauge
               size={220}
               segments={[
-                { value: on, color: C.accent, label: "Routing on" },
-                { value: Math.max(total - on, 0), color: C.accent200, label: "Routing off" },
+                { value: on, color: th.c.accent, label: "Routing on" },
+                { value: Math.max(total - on, 0), color: th.c.accent200, label: "Routing off" },
               ]}
               center={
                 <>

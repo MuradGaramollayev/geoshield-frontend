@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { LogoLockup } from "../brand/Logo";
 import { Link } from "react-router-dom";
 import { Menu, X, Globe } from "lucide-react";
 
@@ -26,12 +27,7 @@ export default function Navbar() {
   return (
     <nav className={"fixed top-0 left-0 right-0 z-50 transition-all duration-300 " + (scrolled ? "bg-navy/90 backdrop-blur-md border-b border-slate-800" : "bg-transparent")}>
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        <span
-          className="font-mono font-bold text-white tracking-wider text-lg"
-          style={{ textShadow: "0 0 12px rgba(16, 185, 129, 0.35)" }}
-        >
-          GEOSHIELD
-        </span>
+        <LogoLockup size={30} variant="white" />
 
         <div className="hidden md:flex items-center gap-8">
           {navLinks.map(function (link) {

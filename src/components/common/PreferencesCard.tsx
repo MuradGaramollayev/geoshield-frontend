@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getPrefs, savePrefs, TIMEZONES } from "../../utils/prefs";
+import { useTheme } from "../../design/themeContext";
 import { Button, Card, CardHeader, SelectField, TextField } from "../ui";
 
 /** Browser-local preferences. Timezone drives every timestamp in the app. */
@@ -7,13 +8,14 @@ export default function PreferencesCard({ showOrg = false }: { showOrg?: boolean
   const [prefs, setPrefs] = useState(getPrefs);
   const [draft, setDraft] = useState(prefs);
   const [saved, setSaved] = useState(false);
+  const { theme, setTheme } = useTheme();
   const dirty = JSON.stringify(prefs) !== JSON.stringify(draft);
 
   return (
     <Card>
       <CardHeader
         title={showOrg ? "Organisation" : "Preferences"}
-        description="Saved in this browser. Timestamps across GeoShield use the timezone you pick."
+        description="Saved in this browser. Appearance applies to this panel; timestamps everywhere use the timezone you pick."
       />
       <form
         className="grid grid-cols-1 sm:grid-cols-2 gap-4"
@@ -34,6 +36,14 @@ export default function PreferencesCard({ showOrg = false }: { showOrg?: boolean
             }}
           />
         )}
+        <SelectField
+          label="Appearance"
+          value={theme}
+          onChange={(e) => setTheme(e.target.value as "light" | "dark")}
+        >
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </SelectField>
         <SelectField
           label="Timezone"
           value={draft.timezone}

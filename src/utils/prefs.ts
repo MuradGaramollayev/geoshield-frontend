@@ -5,10 +5,12 @@
 export interface Prefs {
   orgName: string;
   timezone: string; // IANA zone, or "local"
+  /** Chosen theme per panel; unset panels fall back to their default. */
+  theme: Partial<Record<"analyst" | "enterprise" | "public", "light" | "dark">>;
 }
 
 const KEY = "geoshield_prefs";
-const DEFAULTS: Prefs = { orgName: "", timezone: "local" };
+const DEFAULTS: Prefs = { orgName: "", timezone: "local", theme: {} };
 
 export function getPrefs(): Prefs {
   try {

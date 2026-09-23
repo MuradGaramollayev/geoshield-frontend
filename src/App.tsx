@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { LogoMark } from "./components/brand/Logo";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AnalystShell from "./components/layout/AnalystShell";
 import EnterpriseShell from "./components/layout/EnterpriseShell";
@@ -32,7 +33,16 @@ const RiskForecast = lazy(() => import("./pages/enterprise/RiskForecast"));
 const SupplyChainRisk = lazy(() => import("./pages/enterprise/SupplyChainRisk"));
 
 function RouteFallback() {
-  return <div className="p-6"><div className="skeleton h-8 w-64 mb-4" /><div className="skeleton h-40 w-full rounded-[20px]" /></div>;
+  return (
+    <div className="p-6">
+      <div className="flex items-center gap-3 mb-6 opacity-70">
+        <LogoMark size={26} />
+        <span className="text-sm text-text-3">Loading…</span>
+      </div>
+      <div className="skeleton h-8 w-64 mb-4" />
+      <div className="skeleton h-40 w-full rounded-[20px]" />
+    </div>
+  );
 }
 
 function App() {

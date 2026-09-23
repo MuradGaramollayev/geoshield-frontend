@@ -3,13 +3,14 @@ import { motion } from "framer-motion";
 import { Bug, Package, Skull } from "lucide-react";
 import { analyzeSupplyChain, fetchSupplyChainVendors } from "../../services/api";
 import type { SupplyChainAnalysis, SupplyChainVendor } from "../../services/api";
-import { SEVERITY } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
 import { useMotion } from "../../design/panel";
 import {
   Badge, Button, Card, CardHeader, EmptyState, ErrorState, MeterRow, MethodologyNote, PageHeader, SearchField, Skeleton, StatTile,
 } from "../../components/ui";
 
 export default function SupplyChainRisk() {
+  const th = useTheme();
   const [vendors, setVendors] = useState<SupplyChainVendor[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -107,7 +108,7 @@ export default function SupplyChainRisk() {
                   icon={<Skull size={18} />}
                   label="Linked to ransomware"
                   value={analysis.ransomware_count}
-                  valueTone={analysis.ransomware_count > 0 ? SEVERITY.CRITICAL.text : undefined}
+                  valueTone={analysis.ransomware_count > 0 ? th.sev.CRITICAL.text : undefined}
                   delay={0.07}
                 />
               </div>
