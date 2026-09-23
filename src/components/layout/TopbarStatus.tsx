@@ -1,6 +1,8 @@
-import { Link } from "react-router-dom";
-import { Bell, Search } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Bell, LogOut, Search, Settings as SettingsIcon } from "lucide-react";
 import { formatAsOf } from "../../services/api";
+import { clearUser } from "../../utils/auth";
 import { useShellData } from "./shellData";
 
 /** Honest backend status: feed mode + the dataset's as-of date. */
@@ -56,8 +58,30 @@ export function AlertsBell({ to }: { to: string }) {
   );
 }
 
+/**
+ * The account control: who is signed in, with settings and a real sign-out.
+ * Signing out clears the stored session and returns to the public site.
+ */
 export function UserChip({ settingsPath }: { settingsPath: string }) {
   const { user, initials } = useShellData();
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   if (!user) {
     return (
       <Link to="/login" className="h-10 px-4 rounded-[12px] bg-ink-2 text-paper text-sm font-semibold inline-flex items-center interactive hover:bg-black">
@@ -65,20 +89,65 @@ export function UserChip({ settingsPath }: { settingsPath: string }) {
       </Link>
     );
   }
+
+  const signOut = () => {
+    clearUser();
+    setOpen(false);
+    // Replace, so the back button cannot return to a console the cleared
+    // session no longer belongs to.
+    navigate("/", { replace: true });
+  };
+
   return (
-    <Link
-      to={settingsPath}
-      title={`${user.firstName} ${user.lastName} · ${user.role}`}
-      className="flex items-center gap-2.5 h-10 pl-1 pr-3 rounded-[12px] hover:bg-sunken interactive"
-    >
-      <span className="w-8 h-8 rounded-[10px] bg-ink-2 text-paper text-xs font-bold inline-flex items-center justify-center">
-        {initials}
-      </span>
-      <span className="hidden lg:block text-left leading-tight">
-        <span className="block text-sm font-semibold text-ink">{user.firstName}</span>
-        <span className="block text-2xs text-text-3">{user.role}</span>
-      </span>
-    </Link>
+    <div className="relative" ref={boxRef}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={`${user.firstName} ${user.lastName} · ${user.role}`}
+        className="flex items-center gap-2.5 h-10 pl-1 pr-3 rounded-[12px] hover:bg-sunken interactive"
+      >
+        <span className="w-8 h-8 rounded-[10px] bg-ink-2 text-paper text-xs font-bold inline-flex items-center justify-center">
+          {initials}
+        </span>
+        <span className="hidden lg:block text-left leading-tight">
+          <span className="block text-sm font-semibold text-ink">{user.firstName}</span>
+          <span className="block text-2xs text-text-3">{user.role}</span>
+        </span>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="e4 absolute right-0 top-12 z-50 w-60 rounded-[14px] p-1.5"
+        >
+          <div className="px-3 py-2.5">
+            <p className="text-sm font-semibold text-ink truncate">
+              {user.firstName} {user.lastName}
+            </p>
+            <p className="text-2xs text-text-3 truncate">{user.email}</p>
+          </div>
+          <div className="h-px bg-line mx-1.5" />
+          <Link
+            to={settingsPath}
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-sm text-ink hover:bg-sunken interactive"
+          >
+            <SettingsIcon size={15} className="text-text-3" />
+            Settings
+          </Link>
+          <button
+            role="menuitem"
+            onClick={signOut}
+            className="flex w-full items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-sm text-sev-critical-text hover:bg-sev-critical-tint interactive"
+          >
+            <LogOut size={15} />
+            Log out
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
