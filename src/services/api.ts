@@ -794,3 +794,56 @@ export async function analyzeSupplyChain(vendors: string[]): Promise<SupplyChain
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
+
+/* ── Peer benchmarking ─────────────────────────────────────────── */
+
+export interface BenchmarkVector {
+  source: string;
+  label: string;
+  count: number;
+  share: number;
+  peer_median_share: number;
+  delta: number;
+}
+
+export interface BenchmarkSignal {
+  source: string;
+  label: string;
+  count: number;
+  peer_median_count: number;
+}
+
+export interface BenchmarkResult {
+  country: { code: string; name: string; risk_score: number; risk_level: string; total_threats: number; source_count: number };
+  band: { index: number; name: string; size: number; volume_range: [number, number] };
+  position: {
+    peer_percentile: number;
+    global_percentile: number;
+    peer_median: number;
+    global_median: number;
+    gap_to_peer_median: number;
+    rank_in_band: number;
+    rank_global: number;
+    countries_total: number;
+  };
+  vectors: BenchmarkVector[];
+  additional_signals: BenchmarkSignal[];
+  nearest_peers: { code: string; name: string; risk_score: number; total_threats: number }[];
+  methodology: string;
+}
+
+export async function fetchBenchmark(code: string): Promise<BenchmarkResult> {
+  return cachedGet<BenchmarkResult>(`/api/benchmark/${encodeURIComponent(code)}`);
+}
+
+export interface PeerBand {
+  band: number;
+  name: string;
+  countries: number;
+  volume_range: [number, number];
+  median_risk: number;
+}
+
+export async function fetchPeerBands(): Promise<{ count: number; bands: PeerBand[] }> {
+  return cachedGet("/api/benchmark/peers/bands");
+}

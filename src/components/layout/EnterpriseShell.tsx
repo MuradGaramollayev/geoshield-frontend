@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
-  BarChart3, Bell, BookOpen, FileText, LayoutDashboard, Package, Plug, Settings, ShieldCheck, TrendingUp, Users,
+  BarChart3, Bell, BookOpen, FileText, LayoutDashboard, Package, Plug, Scale, Settings, ShieldCheck, TrendingUp, Users,
 } from "lucide-react";
 import { PanelContext } from "../../design/panel";
 import { ThemeProvider } from "../../design/theme";
@@ -20,6 +20,7 @@ const ENTERPRISE_NAV: PaletteNavItem[] = [
   { icon: TrendingUp, label: "Risk Forecast", path: "/enterprise/forecast", group: "Risk exposure" },
   { icon: Package, label: "Supply Chain Risk", path: "/enterprise/supply-chain", group: "Risk exposure" },
   { icon: ShieldCheck, label: "Defense Architecture", path: "/enterprise/defense", group: "Risk exposure" },
+  { icon: Scale, label: "Peer Benchmarking", path: "/enterprise/benchmarking", group: "Risk exposure" },
   { icon: FileText, label: "Board Reports", path: "/enterprise/reports", group: "Governance" },
   { icon: Bell, label: "Alert Overview", path: "/enterprise/alerts", group: "Governance" },
   { icon: Plug, label: "Integrations", path: "/enterprise/integrations", group: "Workspace" },
