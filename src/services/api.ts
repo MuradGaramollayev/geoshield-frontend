@@ -733,13 +733,30 @@ export interface ForecastPoint {
   upper_bound: number;
 }
 
+/** The real evidence a projection rests on, so the UI never has to guess. */
+export interface ForecastBasis {
+  dated_events: number;
+  active_days: number;
+  undated_events_excluded: number;
+  window_days: number;
+  country_indicators?: number;
+  share_percent?: number;
+  recorded_history_days?: number;
+  recorded_trend?: string;
+  recorded_change?: number;
+}
+
 export interface ForecastResult {
   history: ForecastHistoryPoint[];
   forecast: ForecastPoint[];
   trend: "up" | "down" | "stable";
   slope_per_day: number;
   expected_change_percent: number;
+  /** True when the direction and percentage are the global ones, not this country's. */
+  change_is_global?: boolean;
   low_data_warning: boolean;
+  low_data_reason?: string;
+  basis: ForecastBasis;
   methodology: string;
   scope: string;
   country_name?: string;

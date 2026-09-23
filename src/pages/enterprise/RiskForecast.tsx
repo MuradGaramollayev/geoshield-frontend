@@ -8,7 +8,7 @@ import type { CountryRisk, ForecastResult } from "../../services/api";
 import { useTheme } from "../../design/themeContext";
 import { ChartTooltip } from "../../design/ChartTooltip";
 import {
-  Card, CardHeader, ErrorState, MethodologyNote, PageHeader, SelectField, SkeletonCard,
+  Card, CardHeader, ErrorState, KeyValue, MethodologyNote, PageHeader, SelectField, SkeletonCard,
 } from "../../components/ui";
 
 const TREND = {
@@ -71,8 +71,8 @@ export default function RiskForecast() {
             <div role="note" className="flex items-start gap-3 rounded-[16px] bg-caution-tint px-5 py-4">
               <AlertTriangle size={18} className="text-caution shrink-0 mt-0.5" />
               <p className="text-base text-caution">
-                There are very few events for this scope, so the projected trend may not be meaningful. The global forecast
-                gives a steadier signal.
+                {forecast.low_data_reason ||
+                  "There are too few dated events in this window to read a direction from."}
               </p>
             </div>
           )}
@@ -85,8 +85,15 @@ export default function RiskForecast() {
               <div className="flex-1 min-w-[240px]">
                 <p className="text-xl font-semibold text-ink tracking-[-0.01em]">{trend.label}</p>
                 <p className="text-base text-text-2">
-                  Expected change over the next 7 days{forecast.country_name ? ` for ${forecast.country_name}` : ""}
+                  Expected change in daily event volume over the next 7 days
                 </p>
+                {forecast.change_is_global && (
+                  <p className="text-sm text-text-3 mt-1">
+                    This is the global direction. There is no per-country daily series in the data, so only
+                    the level below is scaled &mdash; by {forecast.country_name}&apos;s{" "}
+                    {forecast.basis.share_percent}% share of indicators.
+                  </p>
+                )}
               </div>
               <p className="num text-4xl font-medium tracking-[-0.04em] text-ink">
                 {forecast.expected_change_percent >= 0 ? "+" : ""}
@@ -118,6 +125,43 @@ export default function RiskForecast() {
               <span className="flex items-center gap-2"><span className="w-4 h-0.5 bg-ink-2" /> Recorded events</span>
               <span className="flex items-center gap-2"><span className="w-4 border-t-2 border-dashed border-accent" /> Projection</span>
               <span className="flex items-center gap-2"><span className="w-4 h-2.5 rounded-sm bg-accent/15" /> Confidence band</span>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="What this rests on"
+              description="The evidence behind the projection, stated so the numbers above can be checked."
+            />
+            <div className="grid gap-x-8 sm:grid-cols-2">
+              <KeyValue
+                label={`Dated events in the last ${forecast.basis.window_days} days`}
+                value={`${forecast.basis.dated_events} across ${forecast.basis.active_days} active days`}
+              />
+              <KeyValue
+                label="Undated rows excluded"
+                value={
+                  forecast.basis.undated_events_excluded === 0
+                    ? "none"
+                    : `${forecast.basis.undated_events_excluded} C2 rows (no date in the feed)`
+                }
+              />
+              {forecast.basis.country_indicators !== undefined && (
+                <KeyValue
+                  label="This country's indicators"
+                  value={`${forecast.basis.country_indicators.toLocaleString()} · ${forecast.basis.share_percent}% of all`}
+                />
+              )}
+              {forecast.basis.recorded_history_days !== undefined && (
+                <KeyValue
+                  label="Recorded risk-score history"
+                  value={
+                    forecast.basis.recorded_history_days > 0
+                      ? `${forecast.basis.recorded_history_days} daily snapshot(s), ${forecast.basis.recorded_trend}`
+                      : "no snapshots yet"
+                  }
+                />
+              )}
             </div>
           </Card>
 
