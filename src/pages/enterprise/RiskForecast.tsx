@@ -103,7 +103,10 @@ export default function RiskForecast() {
           </Card>
 
           <Card>
-            <CardHeader title="30-day history and 7-day projection" description="Daily event count" />
+            <CardHeader
+              title={`${forecast.basis.window_days}-day history and 7-day projection`}
+              description={`Daily advisory count, to ${forecast.basis.anchor ?? ""}`}
+            />
             <ResponsiveContainer width="100%" height={340}>
               <ComposedChart data={chartData} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
                 <CartesianGrid stroke={th.chart.gridStroke} vertical={false} />

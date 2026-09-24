@@ -32,6 +32,8 @@ export interface StatusData {
   };
   /** Reference date of the aggregated dataset (YYYY-MM-DD). */
   as_of?: string;
+  /** Newest real event date the feeds have reached; runs ahead of as_of. */
+  events_as_of?: string;
 }
 
 export interface TimelineEvent {
@@ -739,6 +741,8 @@ export interface ForecastBasis {
   active_days: number;
   undated_events_excluded: number;
   window_days: number;
+  /** Newest real event date the window ends on. */
+  anchor?: string;
   country_indicators?: number;
   share_percent?: number;
   recorded_history_days?: number;
