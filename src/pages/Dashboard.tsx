@@ -1,5 +1,5 @@
 import { AlertTriangle, Bug, Radio, Skull } from "lucide-react";
-import { buildSparkline, fetchStatus, fetchTimeline, formatAsOf } from "../services/api";
+import { fetchStatus, fetchTimeline, formatAsOf, seriesFromDaily } from "../services/api";
 import { useAsync } from "../hooks/useAsync";
 import { useTheme } from "../design/themeContext";
 import RiskIndexCard from "../components/common/RiskIndexCard";
@@ -14,15 +14,15 @@ export default function Dashboard() {
   const th = useTheme();
   const { data, error, loading, reload } = useAsync(() => Promise.all([fetchStatus(), fetchTimeline(DAYS)]), []);
   const [status, tl] = data ?? [null, null];
-  const ev = tl?.events ?? [];
+  const daily = tl?.daily;
   const asOf = tl?.as_of;
   const window = asOf ? `${DAYS} days to ${formatAsOf(asOf)}` : `${DAYS} days`;
 
   const tiles = [
-    { label: "Timeline events", icon: <AlertTriangle size={16} />, f: () => true, color: th.c.ink2 },
-    { label: "CVE exploits", icon: <Bug size={16} />, f: (e: { type: string }) => e.type === "CVE_EXPLOIT", color: th.c.accent },
-    { label: "C2 servers", icon: <Radio size={16} />, f: (e: { type: string }) => e.type === "C2_DETECTED", color: th.sev.HIGH.solid },
-    { label: "Critical events", icon: <Skull size={16} />, f: (e: { severity: string }) => e.severity === "CRITICAL", color: th.sev.CRITICAL.solid },
+    { label: "Timeline events", icon: <AlertTriangle size={16} />, key: "count" as const, color: th.c.ink2 },
+    { label: "CVE exploits", icon: <Bug size={16} />, key: "cve" as const, color: th.c.accent },
+    { label: "C2 servers", icon: <Radio size={16} />, key: "c2" as const, color: th.sev.HIGH.solid },
+    { label: "Critical events", icon: <Skull size={16} />, key: "critical" as const, color: th.sev.CRITICAL.solid },
   ];
 
   if (error) return <ErrorState message={error} onRetry={reload} />;
@@ -37,7 +37,7 @@ export default function Dashboard() {
         {loading
           ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} lines={1} />)
           : tiles.map((t, i) => {
-              const series = buildSparkline(ev, DAYS, t.f, asOf);
+              const series = seriesFromDaily(daily, t.key);
               return (
                 <StatTile
                   key={t.label}

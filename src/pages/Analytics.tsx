@@ -46,7 +46,7 @@ export default function Analytics() {
         title="Analytics"
         description={
           countriesRes
-            ? `Aggregates across ${countriesRes.count} countries and ${events.length} timeline events (90 days).`
+            ? `Aggregates across ${countriesRes.count} countries and ${(timeline?.count ?? 0).toLocaleString()} timeline events (90 days).`
             : "Aggregates across countries, techniques and timeline events."
         }
       />

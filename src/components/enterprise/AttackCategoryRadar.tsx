@@ -1,5 +1,5 @@
 import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip } from "recharts";
-import { buildRadarData, fetchTimeline } from "../../services/api";
+import { fetchTimeline, radarFromDaily } from "../../services/api";
 import { useAsync } from "../../hooks/useAsync";
 import { useTheme } from "../../design/themeContext";
 import { ChartTooltip } from "../../design/ChartTooltip";
@@ -10,7 +10,7 @@ export default function AttackCategoryRadar() {
   const { data, error, loading, reload } = useAsync(() => fetchTimeline(21), []);
   if (loading) return <SkeletonCard tall />;
   if (error) return <ErrorState message={error} onRetry={reload} />;
-  const rows = buildRadarData(data!.events, data!.as_of);
+  const rows = radarFromDaily(data!.daily);
 
   return (
     <Card>

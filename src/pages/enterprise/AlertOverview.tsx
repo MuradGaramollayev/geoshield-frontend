@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { buildSparkline, fetchIncidents, fetchTimeline, formatAsOf } from "../../services/api";
+import { fetchIncidents, fetchTimeline, formatAsOf, seriesFromDaily } from "../../services/api";
 import { useAsync } from "../../hooks/useAsync";
 import { SEVERITY_ORDER } from "../../design/tokens";
 import { useTheme } from "../../design/themeContext";
@@ -20,7 +20,7 @@ export default function AlertOverview() {
   const urgent = counts[0].n + counts[1].n;
 
   const series = useMemo(
-    () => (tl ? buildSparkline(tl.events, 30, undefined, tl.as_of).map((d) => ({ date: d.date.slice(5), count: d.value })) : []),
+    () => seriesFromDaily(tl?.daily).map((d) => ({ date: d.date.slice(5), count: d.value })),
     [tl],
   );
   const last7 = series.slice(-7).reduce((s, d) => s + d.count, 0);

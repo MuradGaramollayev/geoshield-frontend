@@ -47,10 +47,25 @@ export interface TimelineEvent {
   ransomware: boolean;
 }
 
+/** Per-day counts for the whole window, so charts never need the raw rows. */
+export interface TimelineDay {
+  date: string;
+  count: number;
+  cve: number;
+  c2: number;
+  critical: number;
+  high: number;
+  ransomware: number;
+}
+
 export interface TimelineData {
   country: string;
   days: number;
+  /** Every event in the window, whatever `events` was capped to. */
   count: number;
+  /** How many rows `events` actually carries. */
+  returned?: number;
+  daily?: TimelineDay[];
   events: TimelineEvent[];
   /** Reference date the backend measures the window from (YYYY-MM-DD). */
   as_of?: string;
@@ -70,31 +85,6 @@ export async function fetchTimeline(days: number = 14): Promise<TimelineData> {
  * from it rather than from the browser clock, so a static dataset never
  * renders as an empty series.
  */
-export function buildSparkline(
-  events: TimelineEvent[],
-  days: number,
-  filterFn?: (e: TimelineEvent) => boolean,
-  anchor?: string
-): { date: string; value: number }[] {
-  const filtered = filterFn ? events.filter(filterFn) : events;
-  const counts: Record<string, number> = {};
-
-  for (const e of filtered) {
-    counts[e.date] = (counts[e.date] || 0) + 1;
-  }
-
-  const end = anchor ? new Date(`${anchor}T00:00:00Z`) : new Date();
-  const result: { date: string; value: number }[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(end);
-    d.setUTCDate(d.getUTCDate() - i);
-    const key = d.toISOString().split("T")[0];
-    result.push({ date: key, value: counts[key] || 0 });
-  }
-  return result;
-}
-
-/** "14 Jul 2026" style label for an as-of date. */
 export function formatAsOf(asOf?: string): string {
   if (!asOf) return "";
   const d = new Date(`${asOf}T00:00:00Z`);
@@ -542,62 +532,12 @@ export interface HeatmapCell {
   count: number;
 }
 
-export function buildHeatmapData(events: TimelineEvent[], weeks: number = 4, anchor?: string): HeatmapCell[] {
-  const today = anchor ? new Date(`${anchor}T23:59:59Z`) : new Date();
-  const cells: HeatmapCell[] = [];
-  for (let w = 0; w < weeks; w++) {
-    for (let d = 0; d < 7; d++) cells.push({ week: w, day: d, count: 0 });
-  }
-  const cellIndex = (w: number, d: number) => w * 7 + d;
-
-  for (const e of events) {
-    const eventDate = new Date(e.date);
-    if (isNaN(eventDate.getTime())) continue;
-    const diffDays = Math.floor((today.getTime() - eventDate.getTime()) / 86400000);
-    const week = Math.floor(diffDays / 7);
-    if (week < 0 || week >= weeks) continue;
-    const day = eventDate.getUTCDay(); // dates are UTC "YYYY-MM-DD"
-    cells[cellIndex(week, day)].count += 1;
-  }
-  return cells;
-}
-
 export interface RadarCategory {
   category: string;
   thisWeek: number;
   lastWeek: number;
 }
 
-export function buildRadarData(events: TimelineEvent[], anchor?: string): RadarCategory[] {
-  const today = anchor ? new Date(`${anchor}T23:59:59Z`) : new Date();
-  const oneWeekAgo = new Date(today.getTime() - 7 * 86400000);
-  const twoWeeksAgo = new Date(today.getTime() - 14 * 86400000);
-
-  const categories: Record<string, { thisWeek: number; lastWeek: number }> = {
-    "CVE Exploit": { thisWeek: 0, lastWeek: 0 },
-    "C2 Activity": { thisWeek: 0, lastWeek: 0 },
-    "Critical Sev.": { thisWeek: 0, lastWeek: 0 },
-    "High Sev.": { thisWeek: 0, lastWeek: 0 },
-    "Ransomware": { thisWeek: 0, lastWeek: 0 },
-  };
-
-  for (const e of events) {
-    const d = new Date(e.date);
-    if (isNaN(d.getTime())) continue;
-    const isThisWeek = d >= oneWeekAgo && d <= today;
-    const isLastWeek = d >= twoWeeksAgo && d < oneWeekAgo;
-    if (!isThisWeek && !isLastWeek) continue;
-    const key = isThisWeek ? "thisWeek" : "lastWeek";
-
-    if (e.type === "CVE_EXPLOIT") categories["CVE Exploit"][key] += 1;
-    if (e.type === "C2") categories["C2 Activity"][key] += 1;
-    if (e.severity === "CRITICAL") categories["Critical Sev."][key] += 1;
-    if (e.severity === "HIGH") categories["High Sev."][key] += 1;
-    if (e.ransomware) categories["Ransomware"][key] += 1;
-  }
-
-  return Object.entries(categories).map(([category, v]) => ({ category, ...v }));
-}
 export interface ReportSchedule {
   configured: boolean;
   frequency: string | null;
@@ -745,6 +685,11 @@ export interface ForecastBasis {
   anchor?: string;
   country_indicators?: number;
   share_percent?: number;
+  /** Days of this country's own dated history behind the fit. */
+  country_history_days?: number;
+  country_history_first?: string | null;
+  country_history_last?: string | null;
+  country_history_events?: number;
   recorded_history_days?: number;
   recorded_trend?: string;
   recorded_change?: number;
@@ -758,6 +703,10 @@ export interface ForecastResult {
   expected_change_percent: number;
   /** True when the direction and percentage are the global ones, not this country's. */
   change_is_global?: boolean;
+  /** "country" = fitted on this country's own dated events; "global_shape" = fallback. */
+  series_source?: "country" | "global_shape";
+  /** What a point on the chart counts. */
+  series_label?: string;
   low_data_warning: boolean;
   low_data_reason?: string;
   basis: ForecastBasis;
@@ -766,14 +715,14 @@ export interface ForecastResult {
   country_name?: string;
 }
 
-export async function fetchGlobalForecast(): Promise<ForecastResult> {
-  const res = await fetch(`${BASE_URL}/api/forecast/global`);
+export async function fetchGlobalForecast(days = 90): Promise<ForecastResult> {
+  const res = await fetch(`${BASE_URL}/api/forecast/global?days=${days}`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 
-export async function fetchCountryForecast(code: string): Promise<ForecastResult> {
-  const res = await fetch(`${BASE_URL}/api/forecast/country/${code}`);
+export async function fetchCountryForecast(code: string, days = 90): Promise<ForecastResult> {
+  const res = await fetch(`${BASE_URL}/api/forecast/country/${code}?days=${days}`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
@@ -1042,4 +991,57 @@ export async function fetchAuditSummary(): Promise<AuditSummary> {
   const res = await fetch(`${BASE_URL}/api/audit/summary`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
+}
+
+/* ── Aggregates from the per-day counts ────────────────────────────
+   The feeds carry tens of thousands of dated sightings, so these build
+   from the window's daily counts rather than from the event rows, which
+   the API caps. */
+
+export function seriesFromDaily(
+  daily: TimelineDay[] | undefined,
+  key: "count" | "cve" | "c2" | "critical" | "high" | "ransomware" = "count",
+): { date: string; value: number }[] {
+  return (daily ?? []).map((d) => ({ date: d.date, value: d[key] }));
+}
+
+export function sparklineFromDaily(daily: TimelineDay[] | undefined): { date: string; value: number }[] {
+  return seriesFromDaily(daily, "count");
+}
+
+export function heatmapFromDaily(daily: TimelineDay[] | undefined, weeks = 4): HeatmapCell[] {
+  const cells: HeatmapCell[] = [];
+  for (let w = 0; w < weeks; w++) {
+    for (let d = 0; d < 7; d++) cells.push({ week: w, day: d, count: 0 });
+  }
+  const days = daily ?? [];
+  // newest day first, so week 0 is the most recent seven days
+  for (let i = days.length - 1, age = 0; i >= 0; i--, age++) {
+    const week = Math.floor(age / 7);
+    if (week >= weeks) break;
+    const day = new Date(`${days[i].date}T00:00:00Z`).getUTCDay();
+    cells[week * 7 + day].count += days[i].count;
+  }
+  return cells;
+}
+
+export function radarFromDaily(daily: TimelineDay[] | undefined): RadarCategory[] {
+  const days = daily ?? [];
+  const recent = days.slice(-7);
+  const previous = days.slice(-14, -7);
+  const sum = (rows: TimelineDay[], key: keyof TimelineDay) =>
+    rows.reduce((n, r) => n + (r[key] as number), 0);
+
+  const rows: { category: string; key: keyof TimelineDay }[] = [
+    { category: "CVE Exploit", key: "cve" },
+    { category: "C2 Activity", key: "c2" },
+    { category: "Critical Sev.", key: "critical" },
+    { category: "High Sev.", key: "high" },
+    { category: "Ransomware", key: "ransomware" },
+  ];
+  return rows.map(({ category, key }) => ({
+    category,
+    thisWeek: sum(recent, key),
+    lastWeek: sum(previous, key),
+  }));
 }

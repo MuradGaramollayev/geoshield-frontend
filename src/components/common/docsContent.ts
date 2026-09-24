@@ -53,6 +53,27 @@ export function coreSections(s: StatusData | null): DocSection[] {
       ],
     },
     {
+      title: "History and forecasting",
+      items: [
+        {
+          q: "Where does the historical data come from?",
+          a: "Two real feeds with real dates. The global series is the CISA Known Exploited Vulnerabilities catalogue, using each advisory's own dateAdded, which runs back to the catalogue's first entry in November 2021. Per-country series come from ThreatFox and Feodo Tracker: every indicator carries a first_seen timestamp from the feed, and each address is geolocated, so a point is the number of malicious hosts first seen in that country on that day.",
+        },
+        {
+          q: "Is any date ever estimated or generated?",
+          a: "No. A record without a real date from its feed is not plotted, and an address that cannot be geolocated is left unattributed rather than assigned to a likely country. Earlier builds gave undated command-and-control rows a placeholder date derived from the address; that is gone.",
+        },
+        {
+          q: "Why does a country sometimes show the global trend?",
+          a: "Because its own series cannot carry one yet. A country needs enough of its own dated events across enough separate days before its trend means anything; until then the page shows the global direction, scaled to that country's share, and says so rather than presenting a country figure it cannot support.",
+        },
+        {
+          q: "How far forward does the forecast go?",
+          a: "Seven days, from a least-squares fit over a 30, 90, 180 or 365-day window of real dated events, with a band of one standard deviation of the fit residuals. The direction and the percentage are the same comparison, so they cannot disagree.",
+        },
+      ],
+    },
+    {
       title: "Analysis modules",
       items: [
         { q: "What is peer benchmarking?", a: `A country is compared with the other countries carrying a similar volume of indicators, not with a world average. Countries are split into four bands by indicator volume, and the page reports the percentile, rank and gap to the peer median, plus the indicator mix against peer medians.` },

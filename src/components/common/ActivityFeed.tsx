@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Radio, Skull } from "lucide-react";
-import { buildSparkline, fetchTimeline, formatAsOf } from "../../services/api";
+import { fetchTimeline, formatAsOf, sparklineFromDaily } from "../../services/api";
 import { useAsync } from "../../hooks/useAsync";
 import { useTheme } from "../../design/themeContext";
 import { useMotion, usePanel } from "../../design/panel";
@@ -24,11 +24,8 @@ export default function ActivityFeed({ limit = 8, height = 460 }: { limit?: numb
     () => [...(data?.events ?? [])].sort((a, b) => b.date.localeCompare(a.date)).slice(0, limit),
     [data, limit],
   );
-  const series = useMemo(
-    () => (data ? buildSparkline(data.events, WINDOW_DAYS, undefined, data.as_of) : []),
-    [data],
-  );
-  const total = data?.events.length ?? 0;
+  const series = useMemo(() => sparklineFromDaily(data?.daily), [data]);
+  const total = data?.count ?? 0;
 
   return (
     <Card className="flex flex-col" style={{ minHeight: height }}>

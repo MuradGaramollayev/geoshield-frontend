@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { buildHeatmapData, fetchTimeline, formatAsOf } from "../../services/api";
+import { fetchTimeline, formatAsOf, heatmapFromDaily } from "../../services/api";
 import type { HeatmapCell } from "../../services/api";
 import { useAsync } from "../../hooks/useAsync";
 import { useTheme } from "../../design/themeContext";
@@ -19,7 +19,7 @@ export default function AttackHeatmap() {
   if (loading) return <SkeletonCard tall />;
   if (error) return <ErrorState message={error} onRetry={reload} />;
 
-  const cells = buildHeatmapData(data!.events, WEEKS, data!.as_of);
+  const cells = heatmapFromDaily(data!.daily, WEEKS);
   const max = Math.max(1, ...cells.map((c) => c.count));
   const tone = (n: number) => (n === 0 ? RAMP[0] : RAMP[Math.min(4, 1 + Math.floor((n / max) * 3.999))]);
 

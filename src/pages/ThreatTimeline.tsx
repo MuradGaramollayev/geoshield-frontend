@@ -30,14 +30,23 @@ export default function ThreatTimeline() {
   const m = useMotion();
   const events = data?.events ?? EMPTY;
 
+  // Counts come from the window's per-day totals, not from the event list:
+  // the API caps that list, so counting it would understate every filter.
+  const totals = useMemo(() => {
+    const daily = data?.daily ?? [];
+    const sum = (key: "count" | "cve" | "c2" | "critical") =>
+      daily.reduce((n, d) => n + d[key], 0);
+    return { all: sum("count"), cve: sum("cve"), c2: sum("c2"), critical: sum("critical") };
+  }, [data]);
+
   const options = useMemo(
     () => [
-      { value: "ALL" as const, label: "All", count: events.length },
-      { value: "CVE_EXPLOIT" as const, label: "CVE", count: events.filter((e) => matches(e, "CVE_EXPLOIT")).length },
-      { value: "C2_DETECTED" as const, label: "C2", count: events.filter((e) => matches(e, "C2_DETECTED")).length },
-      { value: "CRITICAL" as const, label: "Critical", count: events.filter((e) => matches(e, "CRITICAL")).length },
+      { value: "ALL" as const, label: "All", count: totals.all },
+      { value: "CVE_EXPLOIT" as const, label: "CVE", count: totals.cve },
+      { value: "C2_DETECTED" as const, label: "C2", count: totals.c2 },
+      { value: "CRITICAL" as const, label: "Critical", count: totals.critical },
     ],
-    [events],
+    [totals],
   );
 
   const grouped = useMemo(() => {
@@ -55,7 +64,11 @@ export default function ThreatTimeline() {
     <div className="max-w-5xl">
       <PageHeader
         title="Threat Timeline"
-        description="CISA KEV additions and Feodo Tracker C2 infrastructure, newest first, over the last 90 days of the dataset."
+        description={
+          data
+            ? `CISA KEV additions and ThreatFox/Feodo C2 sightings, newest first, over the 90 days to ${data.as_of}. Showing the newest ${(data.returned ?? events.length).toLocaleString()} of ${data.count.toLocaleString()}.`
+            : "CISA KEV additions and ThreatFox/Feodo C2 sightings, newest first."
+        }
         actions={<Segmented ariaLabel="Filter events" options={options} value={filter} onChange={setFilter} />}
       />
 
