@@ -1,4 +1,22 @@
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+export const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+// Short-lived in-memory cache for read-only GETs that several components
+// request on the same screen (status, countries, timeline, MITRE matrix).
+// Mutating endpoints are never cached.
+const GET_TTL_MS = 60_000;
+const getCache = new Map<string, { at: number; promise: Promise<unknown> }>();
+
+async function cachedGet<T>(path: string, ttl = GET_TTL_MS): Promise<T> {
+  const hit = getCache.get(path);
+  if (hit && Date.now() - hit.at < ttl) return hit.promise as Promise<T>;
+  const promise = fetch(`${BASE_URL}${path}`).then((res) => {
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    return res.json() as Promise<T>;
+  });
+  getCache.set(path, { at: Date.now(), promise });
+  promise.catch(() => getCache.delete(path));
+  return promise;
+}
 
 export interface StatusData {
   mode: string;
@@ -12,6 +30,10 @@ export interface StatusData {
     high: number;
     sources: number;
   };
+  /** Reference date of the aggregated dataset (YYYY-MM-DD). */
+  as_of?: string;
+  /** Newest real event date the feeds have reached; runs ahead of as_of. */
+  events_as_of?: string;
 }
 
 export interface TimelineEvent {
@@ -25,68 +47,93 @@ export interface TimelineEvent {
   ransomware: boolean;
 }
 
+/** Per-day counts for the whole window, so charts never need the raw rows. */
+export interface TimelineDay {
+  date: string;
+  count: number;
+  cve: number;
+  c2: number;
+  critical: number;
+  high: number;
+  ransomware: number;
+}
+
 export interface TimelineData {
   country: string;
   days: number;
+  /** Every event in the window, whatever `events` was capped to. */
   count: number;
+  /** How many rows `events` actually carries. */
+  returned?: number;
+  daily?: TimelineDay[];
   events: TimelineEvent[];
+  /** Reference date the backend measures the window from (YYYY-MM-DD). */
+  as_of?: string;
 }
 
 export async function fetchStatus(): Promise<StatusData> {
-  const res = await fetch(`${BASE_URL}/api/status`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  return cachedGet<StatusData>("/api/status");
 }
 
 export async function fetchTimeline(days: number = 14): Promise<TimelineData> {
-  const res = await fetch(`${BASE_URL}/api/timeline?days=${days}`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  return cachedGet<TimelineData>(`/api/timeline?days=${days}`);
 }
 
-// Hadisələri günə görə qruplaşdırıb sparkline üçün array qaytarır
-export function buildSparkline(
-  events: TimelineEvent[],
-  days: number,
-  filterFn?: (e: TimelineEvent) => boolean
-): { value: number }[] {
-  const filtered = filterFn ? events.filter(filterFn) : events;
-  const counts: Record<string, number> = {};
-
-  for (const e of filtered) {
-    counts[e.date] = (counts[e.date] || 0) + 1;
-  }
-
-  const today = new Date();
-  const result: { value: number }[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().split("T")[0];
-    result.push({ value: counts[key] || 0 });
-  }
-  return result;
+/**
+ * Buckets events per day into a fixed-length series (oldest first).
+ * `anchor` is the dataset's as-of date from the API; the window counts back
+ * from it rather than from the browser clock, so a static dataset never
+ * renders as an empty series.
+ */
+export function formatAsOf(asOf?: string): string {
+  if (!asOf) return "";
+  const d = new Date(`${asOf}T00:00:00Z`);
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
+/** Direction of a country's risk score, measured from daily snapshots. */
+export type TrendDirection = "up" | "down" | "stable" | "insufficient";
+
 export interface CountryRisk {
   code: string;
   name: string;
   total_threats: number;
   risk_score: number;
   risk_level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  /** Derived from the country's own source breakdown (backend vectors.py). */
   primary_attack: string;
-  trend: "up" | "down" | "stable";
+  primary_attack_source: string | null;
+  primary_attack_share: number;
+  primary_attack_basis: string;
+  trend: TrendDirection;
+  /** Points of risk score gained or lost across the recorded window. */
+  trend_change: number;
+  /** How many daily snapshots the trend rests on. */
+  trend_days: number;
 }
 
 export interface CountriesData {
   count: number;
   countries: CountryRisk[];
+  trend_days: number;
 }
 
 export async function fetchCountries(): Promise<CountriesData> {
-  const res = await fetch(`${BASE_URL}/api/countries`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  return cachedGet<CountriesData>("/api/countries");
 }
+/** A correlation between two countries, from shared hosting or shared malware family. */
+export interface ThreatFlowLink {
+  source: string;
+  target: string;
+  kind: "hosting" | "malware";
+  weight: number;
+  shared: string[];
+  detail: string;
+}
+
+export async function fetchThreatFlows(limit = 40): Promise<{ count: number; links: ThreatFlowLink[]; methodology: string }> {
+  return cachedGet(`/api/threat-flows?limit=${limit}`);
+}
+
 export interface CountryDetail {
   code: string;
   name: string;
@@ -94,7 +141,13 @@ export interface CountryDetail {
   risk_score: number;
   risk_level: string;
   primary_attack: string;
-  trend: string;
+  primary_attack_source: string | null;
+  primary_attack_share: number;
+  primary_attack_basis: string;
+  trend: TrendDirection;
+  trend_change: number;
+  trend_days: number;
+  score_history: { date: string; risk_score: number }[];
   source_count: number;
   sources: Record<string, number>;
   top_ips: { ip: string; city: string; isp: string }[];
@@ -146,21 +199,83 @@ export interface GreyNoiseData {
   link?: string;
 }
 
+/** Where one source's numbers came from. Nothing is ever synthesised. */
+export type SourceOrigin =
+  | "live"            // fetched from the vendor just now
+  | "cached"          // genuine earlier response, inside the cache TTL
+  | "cached_stale"    // vendor unreachable now; last genuine response shown
+  | "local_dataset"   // from the bundled Shodan / GreyNoise data
+  | "rate_limited"
+  | "auth_error"
+  | "not_found"
+  | "no_key"
+  | "offline"
+  | "quota_guard"     // public demo budget: no vendor was contacted
+  | "error";
+
+export interface SourceStatus {
+  source: SourceOrigin;
+  fetched_at?: string;
+  age_hours?: number;
+  detail?: string;
+}
+
+/** How much of the public demo's live-call budget is left. */
+export interface PublicLimit {
+  allow_request: boolean;
+  allow_live: boolean;
+  live_remaining_today: number;
+  live_remaining_for_you: number;
+  requests_remaining_for_you: number;
+  reason: string;
+}
+
 export interface IocLookupResult {
   ip: string;
-  mode: string;
+  /** live = at least one vendor answered now; cache = shown from cache; unavailable = no vendor data. */
+  mode: "live" | "cache" | "unavailable";
   found?: boolean;
   message?: string;
+  rate_limited?: boolean;
+  sources: Record<string, SourceStatus>;
   abuseipdb: AbuseIPDBData;
   virustotal: VirusTotalData;
   shodan?: ShodanData;
   greynoise?: GreyNoiseData;
   risk_level: string;
   recommendation: string;
+  /** Present only on the public (landing page) endpoint. */
+  public_limit?: PublicLimit;
 }
 
-export async function lookupIoc(ip: string): Promise<IocLookupResult> {
-  const res = await fetch(`${BASE_URL}/api/ioc/lookup?ip=${encodeURIComponent(ip)}`);
+export async function lookupIoc(ip: string, refresh = false): Promise<IocLookupResult> {
+  const res = await fetch(`${BASE_URL}/api/ioc/lookup?ip=${encodeURIComponent(ip)}${refresh ? "&refresh=true" : ""}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export interface IocCacheEntry {
+  ip: string;
+  vendors: string[];
+  fetched_at: string | null;
+  age_hours: number | null;
+}
+
+/** Which IPs have genuine cached vendor responses (used for demo preparation). */
+/**
+ * The landing page's lookup. Same data as lookupIoc, but the backend budgets
+ * how many live vendor calls public traffic may spend, so a visitor cannot
+ * drain the quota the live demo depends on. A refusal still returns a body:
+ * it is an honest "no data", not an error to hide.
+ */
+export async function lookupIocPublic(ip: string): Promise<IocLookupResult> {
+  const res = await fetch(`${BASE_URL}/api/ioc/public-lookup?ip=${encodeURIComponent(ip)}`);
+  if (!res.ok && res.status !== 429) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchIocCache(): Promise<{ count: number; ttl_hours: number; entries: IocCacheEntry[] }> {
+  const res = await fetch(`${BASE_URL}/api/ioc/cache/list`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
@@ -185,16 +300,14 @@ export interface MitreMatrix {
 }
 
 export async function fetchMitreMatrix(): Promise<MitreMatrix> {
-  const res = await fetch(`${BASE_URL}/api/mitre/matrix`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  return cachedGet<MitreMatrix>("/api/mitre/matrix");
 }
 
 export interface MitreTechniqueDetail {
   id: string;
   name: string;
   description?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export async function fetchMitreTechnique(id: string): Promise<MitreTechniqueDetail> {
@@ -241,9 +354,27 @@ export async function fetchIncidents(): Promise<IncidentsData> {
   return res.json();
 }
 
+export async function createIncident(body: {
+  title: string;
+  severity: Incident["severity"];
+  source_ip?: string | null;
+  source_country?: string | null;
+  attack_type?: string | null;
+  assignee?: string;
+  evidence?: string[];
+}): Promise<Incident> {
+  const res = await fetch(`${BASE_URL}/api/incidents`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
 export async function updateIncident(
   id: string,
-  updates: Partial<Pick<Incident, "status" | "assignee" | "resolution">>
+  updates: Partial<Pick<Incident, "status" | "assignee" | "resolution">> & { note?: string }
 ): Promise<Incident> {
   const res = await fetch(`${BASE_URL}/api/incidents/${id}`, {
     method: "PUT",
@@ -401,62 +532,12 @@ export interface HeatmapCell {
   count: number;
 }
 
-export function buildHeatmapData(events: TimelineEvent[], weeks: number = 4): HeatmapCell[] {
-  const today = new Date();
-  const cells: HeatmapCell[] = [];
-  for (let w = 0; w < weeks; w++) {
-    for (let d = 0; d < 7; d++) cells.push({ week: w, day: d, count: 0 });
-  }
-  const cellIndex = (w: number, d: number) => w * 7 + d;
-
-  for (const e of events) {
-    const eventDate = new Date(e.date);
-    if (isNaN(eventDate.getTime())) continue;
-    const diffDays = Math.floor((today.getTime() - eventDate.getTime()) / 86400000);
-    const week = Math.floor(diffDays / 7);
-    if (week < 0 || week >= weeks) continue;
-    const day = eventDate.getDay();
-    cells[cellIndex(week, day)].count += 1;
-  }
-  return cells;
-}
-
 export interface RadarCategory {
   category: string;
   thisWeek: number;
   lastWeek: number;
 }
 
-export function buildRadarData(events: TimelineEvent[]): RadarCategory[] {
-  const today = new Date();
-  const oneWeekAgo = new Date(today.getTime() - 7 * 86400000);
-  const twoWeeksAgo = new Date(today.getTime() - 14 * 86400000);
-
-  const categories: Record<string, { thisWeek: number; lastWeek: number }> = {
-    "CVE Exploit": { thisWeek: 0, lastWeek: 0 },
-    "C2 Activity": { thisWeek: 0, lastWeek: 0 },
-    "Critical Sev.": { thisWeek: 0, lastWeek: 0 },
-    "High Sev.": { thisWeek: 0, lastWeek: 0 },
-    "Ransomware": { thisWeek: 0, lastWeek: 0 },
-  };
-
-  for (const e of events) {
-    const d = new Date(e.date);
-    if (isNaN(d.getTime())) continue;
-    const isThisWeek = d >= oneWeekAgo && d <= today;
-    const isLastWeek = d >= twoWeeksAgo && d < oneWeekAgo;
-    if (!isThisWeek && !isLastWeek) continue;
-    const key = isThisWeek ? "thisWeek" : "lastWeek";
-
-    if (e.type === "CVE_EXPLOIT") categories["CVE Exploit"][key] += 1;
-    if (e.type === "C2") categories["C2 Activity"][key] += 1;
-    if (e.severity === "CRITICAL") categories["Critical Sev."][key] += 1;
-    if (e.severity === "HIGH") categories["High Sev."][key] += 1;
-    if (e.ransomware) categories["Ransomware"][key] += 1;
-  }
-
-  return Object.entries(categories).map(([category, v]) => ({ category, ...v }));
-}
 export interface ReportSchedule {
   configured: boolean;
   frequency: string | null;
@@ -594,26 +675,54 @@ export interface ForecastPoint {
   upper_bound: number;
 }
 
+/** The real evidence a projection rests on, so the UI never has to guess. */
+export interface ForecastBasis {
+  dated_events: number;
+  active_days: number;
+  undated_events_excluded: number;
+  window_days: number;
+  /** Newest real event date the window ends on. */
+  anchor?: string;
+  country_indicators?: number;
+  share_percent?: number;
+  /** Days of this country's own dated history behind the fit. */
+  country_history_days?: number;
+  country_history_first?: string | null;
+  country_history_last?: string | null;
+  country_history_events?: number;
+  recorded_history_days?: number;
+  recorded_trend?: string;
+  recorded_change?: number;
+}
+
 export interface ForecastResult {
   history: ForecastHistoryPoint[];
   forecast: ForecastPoint[];
   trend: "up" | "down" | "stable";
   slope_per_day: number;
   expected_change_percent: number;
+  /** True when the direction and percentage are the global ones, not this country's. */
+  change_is_global?: boolean;
+  /** "country" = fitted on this country's own dated events; "global_shape" = fallback. */
+  series_source?: "country" | "global_shape";
+  /** What a point on the chart counts. */
+  series_label?: string;
   low_data_warning: boolean;
+  low_data_reason?: string;
+  basis: ForecastBasis;
   methodology: string;
   scope: string;
   country_name?: string;
 }
 
-export async function fetchGlobalForecast(): Promise<ForecastResult> {
-  const res = await fetch(`${BASE_URL}/api/forecast/global`);
+export async function fetchGlobalForecast(days = 90): Promise<ForecastResult> {
+  const res = await fetch(`${BASE_URL}/api/forecast/global?days=${days}`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 
-export async function fetchCountryForecast(code: string): Promise<ForecastResult> {
-  const res = await fetch(`${BASE_URL}/api/forecast/country/${code}`);
+export async function fetchCountryForecast(code: string, days = 90): Promise<ForecastResult> {
+  const res = await fetch(`${BASE_URL}/api/forecast/country/${code}?days=${days}`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
@@ -654,4 +763,285 @@ export async function analyzeSupplyChain(vendors: string[]): Promise<SupplyChain
   });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
+}
+
+/* ── Peer benchmarking ─────────────────────────────────────────── */
+
+export interface BenchmarkVector {
+  source: string;
+  label: string;
+  count: number;
+  share: number;
+  peer_median_share: number;
+  delta: number;
+}
+
+export interface BenchmarkSignal {
+  source: string;
+  label: string;
+  count: number;
+  peer_median_count: number;
+}
+
+export interface BenchmarkResult {
+  country: { code: string; name: string; risk_score: number; risk_level: string; total_threats: number; source_count: number };
+  band: { index: number; name: string; size: number; volume_range: [number, number] };
+  position: {
+    peer_percentile: number;
+    global_percentile: number;
+    peer_median: number;
+    global_median: number;
+    gap_to_peer_median: number;
+    rank_in_band: number;
+    rank_global: number;
+    countries_total: number;
+  };
+  vectors: BenchmarkVector[];
+  additional_signals: BenchmarkSignal[];
+  nearest_peers: { code: string; name: string; risk_score: number; total_threats: number }[];
+  methodology: string;
+}
+
+export async function fetchBenchmark(code: string): Promise<BenchmarkResult> {
+  return cachedGet<BenchmarkResult>(`/api/benchmark/${encodeURIComponent(code)}`);
+}
+
+export interface PeerBand {
+  band: number;
+  name: string;
+  countries: number;
+  volume_range: [number, number];
+  median_risk: number;
+}
+
+export async function fetchPeerBands(): Promise<{ count: number; bands: PeerBand[] }> {
+  return cachedGet("/api/benchmark/peers/bands");
+}
+
+/* ── Infrastructure correlation ────────────────────────────────── */
+
+export interface OperatorCountry { code: string; addresses: number }
+
+export interface OperatorRow {
+  operator: string;
+  addresses: number;
+  country_count: number;
+  concentration: number;
+  countries: OperatorCountry[];
+}
+
+export interface OperatorsResult {
+  count: number;
+  total_operators: number;
+  cross_border_operators: number;
+  addresses_listed: number;
+  addresses_in_cross_border_operators: number;
+  min_countries: number;
+  operators: OperatorRow[];
+  methodology: string;
+}
+
+export interface OperatorDetail extends OperatorRow {
+  cities: { city: string; addresses: number }[];
+  sample_addresses: string[];
+  methodology: string;
+}
+
+export interface MalwareFamily {
+  family: string;
+  servers: number;
+  country_count: number;
+  countries: { code: string; servers: number }[];
+}
+
+export async function fetchOperators(minCountries = 2, limit = 25): Promise<OperatorsResult> {
+  return cachedGet(`/api/correlation/operators?limit=${limit}&min_countries=${minCountries}`);
+}
+
+export async function fetchOperator(name: string): Promise<OperatorDetail> {
+  return cachedGet(`/api/correlation/operator/${encodeURIComponent(name)}`);
+}
+
+export interface MalwareSpread {
+  count: number;
+  servers_listed: number;
+  c2_servers_attributed: number;
+  countries_hosting_c2: number;
+  families: MalwareFamily[];
+  methodology: string;
+}
+
+export async function fetchMalwareSpread(): Promise<MalwareSpread> {
+  return cachedGet("/api/correlation/malware");
+}
+
+/* ── Custom alert rules ────────────────────────────────────────── */
+
+export interface RuleMatch {
+  code: string;
+  name: string;
+  value: number;
+  risk_score: number;
+  risk_level: string;
+}
+
+export interface AlertRule {
+  id: string;
+  name: string;
+  field: string;
+  field_label: string;
+  unit: string;
+  expression: string;
+  comparator: string;
+  threshold: number;
+  severity: string;
+  scope: string[];
+  enabled: boolean;
+  created_at: string;
+  matches: RuleMatch[];
+  match_count: number;
+  countries_tested: number;
+  evaluated_at: string | null;
+  note?: string;
+}
+
+export interface RuleField {
+  field: string;
+  label: string;
+  unit: string;
+  description: string;
+  available: boolean;
+}
+
+export async function fetchAlertRules(): Promise<{ count: number; firing: number; rules: AlertRule[]; methodology: string }> {
+  const res = await fetch(`${BASE_URL}/api/alert-rules`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchRuleFields(): Promise<{ fields: RuleField[]; comparators: { value: string; symbol: string }[] }> {
+  return cachedGet("/api/alert-rules/fields");
+}
+
+export async function createAlertRule(rule: {
+  name: string;
+  field: string;
+  comparator: string;
+  threshold: number;
+  severity: string;
+  scope: string[];
+}): Promise<AlertRule> {
+  const res = await fetch(`${BASE_URL}/api/alert-rules`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(rule),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function toggleAlertRule(id: string, enabled: boolean): Promise<AlertRule> {
+  const res = await fetch(`${BASE_URL}/api/alert-rules/${id}?enabled=${enabled}`, { method: "PATCH" });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteAlertRule(id: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/alert-rules/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
+/* ── Audit trail ───────────────────────────────────────────────── */
+
+export interface AuditEntry {
+  at: string;
+  action: string;
+  label: string;
+  category: string;
+  detail: string;
+  target: string;
+  actor: string;
+  context?: Record<string, unknown>;
+}
+
+export interface AuditPage {
+  count: number;
+  entries: AuditEntry[];
+  actions: { action: string; label: string; category: string }[];
+  methodology: string;
+}
+
+export async function fetchAuditLog(action = "", limit = 200): Promise<AuditPage> {
+  const query = `limit=${limit}${action ? `&action=${encodeURIComponent(action)}` : ""}`;
+  const res = await fetch(`${BASE_URL}/api/audit?${query}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export interface AuditSummary {
+  total: number;
+  first_at: string | null;
+  last_at: string | null;
+  by_action: Record<string, number>;
+  by_category: Record<string, number>;
+  methodology: string;
+}
+
+export async function fetchAuditSummary(): Promise<AuditSummary> {
+  const res = await fetch(`${BASE_URL}/api/audit/summary`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+/* ── Aggregates from the per-day counts ────────────────────────────
+   The feeds carry tens of thousands of dated sightings, so these build
+   from the window's daily counts rather than from the event rows, which
+   the API caps. */
+
+export function seriesFromDaily(
+  daily: TimelineDay[] | undefined,
+  key: "count" | "cve" | "c2" | "critical" | "high" | "ransomware" = "count",
+): { date: string; value: number }[] {
+  return (daily ?? []).map((d) => ({ date: d.date, value: d[key] }));
+}
+
+export function sparklineFromDaily(daily: TimelineDay[] | undefined): { date: string; value: number }[] {
+  return seriesFromDaily(daily, "count");
+}
+
+export function heatmapFromDaily(daily: TimelineDay[] | undefined, weeks = 4): HeatmapCell[] {
+  const cells: HeatmapCell[] = [];
+  for (let w = 0; w < weeks; w++) {
+    for (let d = 0; d < 7; d++) cells.push({ week: w, day: d, count: 0 });
+  }
+  const days = daily ?? [];
+  // newest day first, so week 0 is the most recent seven days
+  for (let i = days.length - 1, age = 0; i >= 0; i--, age++) {
+    const week = Math.floor(age / 7);
+    if (week >= weeks) break;
+    const day = new Date(`${days[i].date}T00:00:00Z`).getUTCDay();
+    cells[week * 7 + day].count += days[i].count;
+  }
+  return cells;
+}
+
+export function radarFromDaily(daily: TimelineDay[] | undefined): RadarCategory[] {
+  const days = daily ?? [];
+  const recent = days.slice(-7);
+  const previous = days.slice(-14, -7);
+  const sum = (rows: TimelineDay[], key: keyof TimelineDay) =>
+    rows.reduce((n, r) => n + (r[key] as number), 0);
+
+  const rows: { category: string; key: keyof TimelineDay }[] = [
+    { category: "CVE Exploit", key: "cve" },
+    { category: "C2 Activity", key: "c2" },
+    { category: "Critical Sev.", key: "critical" },
+    { category: "High Sev.", key: "high" },
+    { category: "Ransomware", key: "ransomware" },
+  ];
+  return rows.map(({ category, key }) => ({
+    category,
+    thisWeek: sum(recent, key),
+    lastWeek: sum(previous, key),
+  }));
 }

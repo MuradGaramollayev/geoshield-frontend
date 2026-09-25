@@ -1,174 +1,148 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, TrendingUp, TrendingDown, Clock, BarChart3 } from "lucide-react";
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell,
-} from "recharts";
-import { fetchIncidents, fetchTimeline } from "../../services/api";
-import type { Incident, TimelineEvent } from "../../services/api";
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { fetchIncidents, fetchTimeline, formatAsOf, seriesFromDaily } from "../../services/api";
+import { useAsync } from "../../hooks/useAsync";
+import { SEVERITY_ORDER } from "../../design/tokens";
+import { useTheme } from "../../design/themeContext";
+import { ChartTooltip } from "../../design/ChartTooltip";
+import { Card, CardHeader, ErrorState, MethodologyNote, PageHeader, SegmentGauge, SkeletonCard, TrendBadge } from "../../components/ui";
 
-const SEVERITY_COLOR: Record<string, string> = {
-  CRITICAL: "#f43f5e",
-  HIGH: "#fb923c",
-  MEDIUM: "#fbbf24",
-  LOW: "#34d399",
-};
+const OPEN = new Set(["NEW", "ASSIGNED", "INVESTIGATING"]);
 
 export default function AlertOverview() {
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [events, setEvents] = useState<TimelineEvent[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const th = useTheme();
+  const { data, error, loading, reload } = useAsync(() => Promise.all([fetchIncidents(), fetchTimeline(30)]), []);
+  const [inc, tl] = data ?? [null, null];
 
-  useEffect(() => {
-    Promise.all([fetchIncidents(), fetchTimeline(30)])
-      .then(([inc, tl]) => {
-        setIncidents(inc.incidents);
-        setEvents(tl.events);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+  const open = useMemo(() => (inc?.incidents ?? []).filter((i) => OPEN.has(i.status)), [inc]);
+  const counts = SEVERITY_ORDER.map((s) => ({ s, n: open.filter((i) => i.severity === s).length }));
+  const urgent = counts[0].n + counts[1].n;
 
-  if (loading) return <div className="p-8 text-slate-400 text-sm">Loading alert overview...</div>;
-  if (error) return <div className="p-8 text-rose-400 text-sm">Error: {error}</div>;
+  const series = useMemo(
+    () => seriesFromDaily(tl?.daily).map((d) => ({ date: d.date.slice(5), count: d.value })),
+    [tl],
+  );
+  const last7 = series.slice(-7).reduce((s, d) => s + d.count, 0);
+  const prev7 = series.slice(-14, -7).reduce((s, d) => s + d.count, 0);
+  const change = prev7 > 0 ? Math.round(((last7 - prev7) / prev7) * 100) : null;
 
-  // Severity breakdown from incidents
-  const counts = {
-    CRITICAL: incidents.filter((i) => i.severity === "CRITICAL").length,
-    HIGH: incidents.filter((i) => i.severity === "HIGH").length,
-    MEDIUM: incidents.filter((i) => i.severity === "MEDIUM").length,
-    LOW: incidents.filter((i) => i.severity === "LOW").length,
-  };
-  const total = incidents.length;
+  const categories = useMemo(() => {
+    const m = new Map<string, number>();
+    open.forEach((i) => i.attack_type && m.set(i.attack_type, (m.get(i.attack_type) ?? 0) + 1));
+    return Array.from(m, ([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+  }, [open]);
 
-  // 30-day trend from real timeline events, grouped by day
-  const trendMap: Record<string, number> = {};
-  events.forEach((e) => {
-    trendMap[e.date] = (trendMap[e.date] || 0) + 1;
-  });
-  const today = new Date();
-  const trendData: { date: string; count: number }[] = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().split("T")[0];
-    trendData.push({ date: key.slice(5), count: trendMap[key] || 0 });
-  }
-
-  // Compare last 7 days vs previous 7 days (real trend %)
-  const last7 = trendData.slice(-7).reduce((s, d) => s + d.count, 0);
-  const prev7 = trendData.slice(-14, -7).reduce((s, d) => s + d.count, 0);
-  const trendPercent = prev7 > 0 ? Math.round(((last7 - prev7) / prev7) * 100) : null;
-
-  // Top attack categories from incidents
-  const categoryMap: Record<string, number> = {};
-  incidents.forEach((i) => {
-    if (i.attack_type) categoryMap[i.attack_type] = (categoryMap[i.attack_type] || 0) + 1;
-  });
-  const categoryData = Object.entries(categoryMap)
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count);
+  if (error) return <ErrorState message={error} onRetry={reload} />;
 
   return (
-    <div className="p-8 space-y-6 max-w-6xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100">Alert Overview</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Executive summary of {total} active alerts · standalone strategic view
-        </p>
-      </div>
+    <div>
+      <PageHeader
+        title="Alert Overview"
+        description="Where attention is needed now, and how threat activity has moved over the last 30 days of the dataset."
+      />
 
-      {/* Severity breakdown — large numbers */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {(["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const).map((sev) => (
-          <div key={sev} className="card-glow p-6">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle size={14} style={{ color: SEVERITY_COLOR[sev] }} />
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">{sev}</span>
-            </div>
-            <p className="text-4xl font-bold" style={{ color: SEVERITY_COLOR[sev] }}>
-              {counts[sev]}
-            </p>
-            <p className="text-xs text-slate-600 mt-1">
-              {total > 0 ? Math.round((counts[sev] / total) * 100) : 0}% of total
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 30-day trend */}
-        <div className="card-glow p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-200">Alert Volume Trend</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Last 30 days, daily event count</p>
-            </div>
-            {trendPercent !== null && (
-              <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${
-                trendPercent >= 0 ? "text-rose-400 bg-rose-500/10" : "text-emerald-400 bg-emerald-500/10"
-              }`}>
-                {trendPercent >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                {Math.abs(trendPercent)}% vs prior week
-              </div>
-            )}
-          </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" vertical={false} />
-              <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} interval={4} />
-              <YAxis tick={{ fill: "#64748b", fontSize: 10 }} allowDecimals={false} />
-              <Tooltip
-                contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: "#e2e8f0" }}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-[var(--gap-grid)] mb-[var(--gap-grid)]">
+        {loading ? (
+          <>
+            <SkeletonCard className="lg:col-span-2" tall />
+            <SkeletonCard className="lg:col-span-3" tall />
+          </>
+        ) : (
+          <>
+            <Card className="lg:col-span-2">
+              <CardHeader title="Open alerts by severity" description="Incidents not yet resolved" />
+              <SegmentGauge
+                size={260}
+                segments={counts.filter((c) => c.n > 0).map((c) => ({ value: c.n, color: th.sev[c.s].solid, label: th.sev[c.s].label }))}
+                center={open.length}
+                caption="open alerts"
               />
-              <Line type="monotone" dataKey="count" stroke="#38bdf8" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+              <ul className="mt-4 space-y-3">
+                {counts.map(({ s, n }) => (
+                  <li key={s} className="flex items-center gap-3">
+                    <span className="w-3 h-3 rounded-[4px]" style={{ background: th.sev[s].solid }} />
+                    <span className="flex-1 text-base text-text-2">{th.sev[s].label}</span>
+                    <span className="num text-xl text-ink">{n}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
 
-        {/* Top categories */}
-        <div className="card-glow p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 size={15} className="text-violet-400" />
-            <h3 className="text-sm font-semibold text-slate-200">Top Alert Categories</h3>
-          </div>
-          {categoryData.length === 0 ? (
-            <p className="text-sm text-slate-500 py-8 text-center">No categorized alerts yet</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={categoryData} layout="vertical" margin={{ left: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" horizontal={false} />
-                <XAxis type="number" tick={{ fill: "#64748b", fontSize: 10 }} allowDecimals={false} />
-                <YAxis type="category" dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} width={90} />
-                <Tooltip
-                  contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: "#e2e8f0" }}
-                />
-                <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="#38bdf8">
-                  {categoryData.map((_, i) => (
-                    <Cell key={i} fill={i === 0 ? "#f43f5e" : "#38bdf8"} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+            <Card className="lg:col-span-3">
+              <CardHeader
+                title="Threat activity"
+                description={`Daily CVE and C2 events, 30 days to ${formatAsOf(tl?.as_of)}`}
+                actions={
+                  change !== null ? (
+                    <TrendBadge trend={change > 0 ? "up" : change < 0 ? "down" : "stable"}>
+                      {change > 0 ? "+" : ""}
+                      {change}% vs prior week
+                    </TrendBadge>
+                  ) : undefined
+                }
+              />
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={series} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="ao-fill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={th.c.accent} stopOpacity={0.3} />
+                      <stop offset="100%" stopColor={th.c.accent} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={th.chart.gridStroke} vertical={false} />
+                  <XAxis dataKey="date" tick={th.chart.axisTick} axisLine={false} tickLine={false} interval={4} />
+                  <YAxis tick={th.chart.axisTick} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area type="monotone" dataKey="count" name="Events" stroke={th.c.accent} strokeWidth={2} fill="url(#ao-fill)" animationDuration={700} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </Card>
+          </>
+        )}
       </div>
 
-      {/* Response readiness */}
-      <div className="card-glow p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Clock size={15} className="text-emerald-400" />
-          <h3 className="text-sm font-semibold text-slate-200">Escalation Readiness</h3>
+      {!loading && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)] mb-[var(--gap-grid)]">
+          <Card>
+            <CardHeader title="What the open alerts are about" description="Open incidents by attack type" />
+            {categories.length === 0 ? (
+              <p className="text-base text-text-3 py-10 text-center">No open alerts carry an attack type.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(140, categories.length * 44)}>
+                <BarChart data={categories} layout="vertical" margin={{ left: 0, right: 16 }} barCategoryGap={12}>
+                  <XAxis type="number" hide allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" tick={{ ...th.chart.axisTick, fontSize: 13, fill: th.c.text2 }} width={110} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: th.chart.cursor }} content={<ChartTooltip />} />
+                  <Bar dataKey="count" name="Open alerts" fill={th.c.ink2} radius={[0, 8, 8, 0]} animationDuration={600} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+
+          <Card className="flex flex-col">
+            <CardHeader title="Response readiness" />
+            <p className="text-3xl font-medium tracking-[-0.03em] text-ink num mb-2">
+              {urgent} <span className="text-text-3 text-xl">of {open.length}</span>
+            </p>
+            <p className="text-base text-text-2 max-w-[48ch]">
+              open alerts are critical or high severity and need prioritised attention from the security team.
+            </p>
+            <Link to="/enterprise/team" className="mt-auto pt-6 text-sm font-semibold text-accent-ink hover:underline">
+              Review who is on the response team
+            </Link>
+          </Card>
         </div>
-        <p className="text-sm text-slate-400">
-          {counts.CRITICAL + counts.HIGH} of {total} active alerts are Critical or High severity
-          and require prioritized attention. Configure automated escalation thresholds in{" "}
-          <span className="text-slate-300 font-medium">Settings</span>.
+      )}
+
+      <MethodologyNote>
+        <p>Open alerts are incidents whose status is New, Assigned or Investigating, grouped by the severity the incident was raised with.</p>
+        <p>
+          Threat activity counts CISA KEV and Feodo C2 timeline events per day, for the 30 days ending on the dataset date.
+          The weekly change compares the last 7 days with the 7 before. C2 events use placeholder dates, so read the curve as
+          direction rather than exact daily counts.
         </p>
-      </div>
+      </MethodologyNote>
     </div>
   );
 }

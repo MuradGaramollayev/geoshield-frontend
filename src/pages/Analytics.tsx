@@ -1,169 +1,153 @@
-import { useEffect, useState } from "react";
-import { BarChart3, TrendingUp, Globe2, ShieldAlert } from "lucide-react";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
-} from "recharts";
+import { useMemo } from "react";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bug, Globe2, ShieldAlert, Skull } from "lucide-react";
 import { fetchCountries, fetchMitreMatrix, fetchTimeline } from "../services/api";
-import type { CountryRisk, MitreMatrix, TimelineEvent } from "../services/api";
-
-const RISK_COLOR: Record<string, string> = {
-  CRITICAL: "#f43f5e",
-  HIGH: "#fb923c",
-  MEDIUM: "#fbbf24",
-  LOW: "#34d399",
-};
+import { useAsync } from "../hooks/useAsync";
+import { EMPTY } from "../utils/empty";
+import { SEVERITY_ORDER, toSeverity } from "../design/tokens";
+import { useTheme } from "../design/themeContext";
+import { ChartTooltip } from "../design/ChartTooltip";
+import RiskScoreNote from "../components/common/RiskScoreNote";
+import { Card, CardHeader, ErrorState, PageHeader, SkeletonCard, StatTile } from "../components/ui";
 
 export default function Analytics() {
-  const [countries, setCountries] = useState<CountryRisk[]>([]);
-  const [matrix, setMatrix] = useState<MitreMatrix | null>(null);
-  const [events, setEvents] = useState<TimelineEvent[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const th = useTheme();
+  const { data, error, loading, reload } = useAsync(
+    () => Promise.all([fetchCountries(), fetchMitreMatrix(), fetchTimeline(90)]),
+    [],
+  );
+  const [countriesRes, matrix, timeline] = data ?? [null, null, null];
+  const countries = countriesRes?.countries ?? EMPTY;
+  const events = timeline?.events ?? [];
 
-  useEffect(() => {
-    Promise.all([fetchCountries(), fetchMitreMatrix(), fetchTimeline(90)])
-      .then(([c, m, t]) => {
-        setCountries(c.countries);
-        setMatrix(m);
-        setEvents(t.events);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+  const top = useMemo(
+    () =>
+      [...countries]
+        .sort((a, b) => b.risk_score - a.risk_score)
+        .slice(0, 12)
+        .map((c) => ({ code: c.code, name: c.name, risk: c.risk_score, level: c.risk_level })),
+    [countries],
+  );
+  const dist = SEVERITY_ORDER.map((s) => ({ s, n: countries.filter((c) => c.risk_level === s).length }));
+  const techniques = useMemo(
+    () =>
+      (matrix?.tactics.flatMap((t) => t.techniques) ?? [])
+        .sort((a, b) => b.our_count - a.our_count)
+        .slice(0, 10)
+        .map((t) => ({ id: t.id, name: t.name, count: t.our_count, severity: t.severity })),
+    [matrix],
+  );
 
-  if (loading) return <div className="p-6 text-slate-400 text-sm">Loading...</div>;
-  if (error) return <div className="p-6 text-rose-400 text-sm">Error: {error}</div>;
-
-  // Top 10 countries by risk score
-  const topCountries = [...countries]
-    .sort((a, b) => b.risk_score - a.risk_score)
-    .slice(0, 10)
-    .map((c) => ({ name: c.code, risk: c.risk_score, level: c.risk_level }));
-
-  // Risk level distribution
-  const levelCounts: Record<string, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-  countries.forEach((c) => { levelCounts[c.risk_level] = (levelCounts[c.risk_level] || 0) + 1; });
-  const levelData = Object.entries(levelCounts)
-    .filter(([, v]) => v > 0)
-    .map(([name, value]) => ({ name, value }));
-
-  // Top attack techniques (MITRE)
-  const allTechniques = matrix?.tactics.flatMap((t) => t.techniques) || [];
-  const topTechniques = [...allTechniques]
-    .sort((a, b) => b.our_count - a.our_count)
-    .slice(0, 8)
-    .map((t) => ({ name: t.id, count: t.our_count, severity: t.severity }));
-
-  // Events by type
-  const cveCount = events.filter((e) => e.type === "CVE_EXPLOIT").length;
-  const ransomwareCount = events.filter((e) => e.ransomware).length;
+  if (error) return <ErrorState message={error} onRetry={reload} />;
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-100 mb-1">Analytics</h1>
-        <p className="text-sm text-slate-500">
-          Aggregate statistics across {countries.length} countries, {matrix?.total_mapped.toLocaleString()} indicators
-        </p>
+    <div>
+      <PageHeader
+        title="Analytics"
+        description={
+          countriesRes
+            ? `Aggregates across ${countriesRes.count} countries and ${(timeline?.count ?? 0).toLocaleString()} timeline events (90 days).`
+            : "Aggregates across countries, techniques and timeline events."
+        }
+      />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)] mb-[var(--gap-grid)]">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} lines={0} />)
+        ) : (
+          <>
+            <StatTile icon={<Globe2 size={16} />} label="Countries tracked" value={countries.length} />
+            <StatTile icon={<ShieldAlert size={16} />} label="Timeline events, 90 days" value={events.length} delay={0.03} />
+            <StatTile icon={<Bug size={16} />} label="CVE exploits" value={events.filter((e) => e.type === "CVE_EXPLOIT").length} delay={0.06} />
+            <StatTile
+              icon={<Skull size={16} />}
+              label="Ransomware-linked"
+              value={events.filter((e) => e.ransomware).length}
+              valueTone={th.sev.CRITICAL.text}
+              delay={0.09}
+            />
+          </>
+        )}
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="card-glow p-4">
-          <Globe2 size={16} className="text-sky-400 mb-2" />
-          <p className="text-2xl font-bold text-slate-100">{countries.length}</p>
-          <p className="text-xs text-slate-500 mt-1">Countries Tracked</p>
-        </div>
-        <div className="card-glow p-4">
-          <ShieldAlert size={16} className="text-rose-400 mb-2" />
-          <p className="text-2xl font-bold text-slate-100">{events.length}</p>
-          <p className="text-xs text-slate-500 mt-1">Events (90 days)</p>
-        </div>
-        <div className="card-glow p-4">
-          <TrendingUp size={16} className="text-amber-400 mb-2" />
-          <p className="text-2xl font-bold text-slate-100">{cveCount}</p>
-          <p className="text-xs text-slate-500 mt-1">CVE Exploits</p>
-        </div>
-        <div className="card-glow p-4">
-          <BarChart3 size={16} className="text-violet-400 mb-2" />
-          <p className="text-2xl font-bold text-slate-100">{ransomwareCount}</p>
-          <p className="text-xs text-slate-500 mt-1">Ransomware-linked</p>
-        </div>
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-[var(--gap-grid)] mb-[var(--gap-grid)]">
+        <Card className="xl:col-span-3">
+          <CardHeader title="Highest-risk countries" description="Top 12 by risk score, coloured by severity band" />
+          {loading ? (
+            <div className="skeleton h-[340px] rounded-[14px]" />
+          ) : (
+            <ResponsiveContainer width="100%" height={340}>
+              <BarChart data={top} layout="vertical" margin={{ left: 0, right: 16, top: 0, bottom: 0 }} barCategoryGap={6}>
+                <CartesianGrid stroke={th.chart.gridStroke} horizontal={false} />
+                <XAxis type="number" domain={[0, 100]} tick={th.chart.axisTick} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="code" tick={th.chart.axisTickMono} width={34} axisLine={false} tickLine={false} />
+                <Tooltip
+                  cursor={{ fill: th.chart.cursor }}
+                  content={<ChartTooltip labelFormat={(l) => top.find((t) => t.code === l)?.name ?? l} format={(v) => `${v} / 100`} />}
+                />
+                <Bar dataKey="risk" name="Risk score" radius={[0, 6, 6, 0]} isAnimationActive animationDuration={500}>
+                  {top.map((t) => (
+                    <Cell key={t.code} fill={th.sev[toSeverity(t.level) ?? "LOW"].solid} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
+
+        <Card className="xl:col-span-2">
+          <CardHeader title="Countries by severity band" description="How the 124 monitored countries are distributed" />
+          {loading ? (
+            <div className="skeleton h-[340px] rounded-[14px]" />
+          ) : (
+            <div>
+              <div className="flex h-4 rounded-full overflow-hidden mb-6 gap-0.5">
+                {dist.filter((d) => d.n > 0).map((d) => (
+                  <span key={d.s} style={{ width: `${(d.n / countries.length) * 100}%`, background: th.sev[d.s].solid }} title={`${th.sev[d.s].label}: ${d.n}`} />
+                ))}
+              </div>
+              <ul className="divide-y divide-line">
+                {dist.map((d) => (
+                  <li key={d.s} className="flex items-center gap-3 py-3">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: th.sev[d.s].solid }} />
+                    <span className="flex-1 text-base text-ink">{th.sev[d.s].label}</span>
+                    <span className="num text-xl font-medium text-ink">{d.n}</span>
+                    <span className="num text-sm text-text-3 w-12 text-right">
+                      {countries.length ? Math.round((d.n / countries.length) * 100) : 0}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top 10 countries bar chart */}
-        <div className="card-glow p-5">
-          <h3 className="text-sm font-semibold text-slate-200 mb-4">Top 10 Countries by Risk Score</h3>
+      <Card className="mb-[var(--gap-grid)]">
+        <CardHeader title="ATT&CK techniques by attributed volume" description="Top 10; see MITRE ATT&CK for how indicators are attributed" />
+        {loading ? (
+          <div className="skeleton h-[280px] rounded-[14px]" />
+        ) : (
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={topCountries} layout="vertical" margin={{ left: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" horizontal={false} />
-              <XAxis type="number" domain={[0, 100]} tick={{ fill: "#64748b", fontSize: 11 }} />
-              <YAxis type="category" dataKey="name" tick={{ fill: "#94a3b8", fontSize: 12 }} width={40} />
+            <BarChart data={techniques} margin={{ left: 0, right: 8, top: 8, bottom: 0 }} barCategoryGap={10}>
+              <CartesianGrid stroke={th.chart.gridStroke} vertical={false} />
+              <XAxis dataKey="id" tick={th.chart.axisTickMono} axisLine={false} tickLine={false} />
+              <YAxis tick={th.chart.axisTick} axisLine={false} tickLine={false} width={44} />
               <Tooltip
-                contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: "#e2e8f0" }}
+                cursor={{ fill: th.chart.cursor }}
+                content={<ChartTooltip labelFormat={(l) => `${l} · ${techniques.find((t) => t.id === l)?.name ?? ""}`} />}
               />
-              <Bar dataKey="risk" radius={[0, 4, 4, 0]}>
-                {topCountries.map((entry, i) => (
-                  <Cell key={i} fill={RISK_COLOR[entry.level] || "#38bdf8"} />
+              <Bar dataKey="count" name="Attributed indicators" radius={[6, 6, 0, 0]} animationDuration={500}>
+                {techniques.map((t) => (
+                  <Cell key={t.id} fill={th.sev[toSeverity(t.severity) ?? "LOW"].solid} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        )}
+      </Card>
 
-        {/* Risk level distribution pie */}
-        <div className="card-glow p-5">
-          <h3 className="text-sm font-semibold text-slate-200 mb-4">Risk Level Distribution</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
-              <Pie
-                data={levelData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                outerRadius={90}
-                label={(entry) => `${entry.name}: ${entry.value}`}
-                labelLine={false}
-              >
-                {levelData.map((entry, i) => (
-                  <Cell key={i} fill={RISK_COLOR[entry.name] || "#94a3b8"} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
-              />
-              <Legend
-                formatter={(value) => <span style={{ color: "#94a3b8", fontSize: 12 }}>{value}</span>}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Top MITRE techniques */}
-        <div className="card-glow p-5 lg:col-span-2">
-          <h3 className="text-sm font-semibold text-slate-200 mb-4">Top MITRE ATT&CK Techniques by Volume</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={topTechniques}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" vertical={false} />
-              <XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} />
-              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} />
-              <Tooltip
-                contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: "#e2e8f0" }}
-              />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {topTechniques.map((entry, i) => (
-                  <Cell key={i} fill={RISK_COLOR[entry.severity] || "#38bdf8"} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      <RiskScoreNote />
     </div>
   );
 }

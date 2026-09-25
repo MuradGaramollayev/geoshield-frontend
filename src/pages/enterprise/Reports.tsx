@@ -1,244 +1,154 @@
-import { useEffect, useState } from "react";
-import { FileText, Download, Loader2, CheckCircle2, Calendar, Save, Eye } from "lucide-react";
+import { useState } from "react";
+import { CalendarClock, CheckCircle2, Download, FileText } from "lucide-react";
 import {
-  downloadReport, fetchReportSchedule, updateReportSchedule,
-  fetchStatus, fetchCountries,
+  downloadReport, fetchCountries, fetchReportSchedule, fetchStatus, formatAsOf, updateReportSchedule,
 } from "../../services/api";
-import type { ReportSchedule, StatusData, CountryRisk } from "../../services/api";
-
-function formatTimestamp(ts: string): string {
-  const cleaned = ts.replace(/([+-]\d{2}:\d{2})Z$/, "$1");
-  const d = new Date(cleaned);
-  return isNaN(d.getTime()) ? ts : d.toLocaleString();
-}
-
-const RISK_COLOR: Record<string, string> = {
-  CRITICAL: "#f43f5e",
-  HIGH: "#fb923c",
-  MEDIUM: "#fbbf24",
-  LOW: "#34d399",
-};
+import { useAsync } from "../../hooks/useAsync";
+import type { ReportSchedule } from "../../services/api";
+import { formatTs } from "../../utils/time";
+import {
+  Badge, Button, Card, CardHeader, IconTile, PageHeader, SelectField, SeverityBadge, Skeleton, TextField,
+} from "../../components/ui";
 
 export default function EnterpriseReports() {
+  const preview = useAsync(() => Promise.all([fetchStatus(), fetchCountries()]), []);
+  const sched = useAsync(fetchReportSchedule, []);
+  const [status, countries] = preview.data ?? [null, null];
+  const top = [...(countries?.countries ?? [])].sort((a, b) => b.risk_score - a.risk_score).slice(0, 5);
+
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [history, setHistory] = useState<{ name: string; time: string }[]>([]);
 
-  const [schedule, setSchedule] = useState<ReportSchedule | null>(null);
-  const [frequency, setFrequency] = useState("weekly");
-  const [email, setEmail] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  const [status, setStatus] = useState<StatusData | null>(null);
-  const [topCountries, setTopCountries] = useState<CountryRisk[]>([]);
-
-  useEffect(() => {
-    fetchReportSchedule().then((s) => {
-      setSchedule(s);
-      if (s.frequency) setFrequency(s.frequency);
-      if (s.email) setEmail(s.email);
-    });
-    fetchStatus().then(setStatus);
-    fetchCountries().then((data) => {
-      const sorted = [...data.countries].sort((a, b) => b.risk_score - a.risk_score).slice(0, 3);
-      setTopCountries(sorted);
-    });
-  }, []);
-
-  const handleGenerate = async () => {
+  const generate = async () => {
     setGenerating(true);
     setGenError(null);
     try {
       await downloadReport();
       const now = new Date();
-      setHistory((prev) => [
-        { name: `GeoShield_Executive_Report_${now.toISOString().slice(0, 10).replace(/-/g, "")}.pdf`, time: now.toLocaleString() },
-        ...prev,
-      ]);
-    } catch (err: any) {
-      setGenError(err.message);
+      setHistory((h) => [{ name: `GeoShield_Board_Briefing_${now.toISOString().slice(0, 10)}.pdf`, time: now.toLocaleString("en-GB") }, ...h]);
+    } catch (err) {
+      setGenError(err instanceof Error ? err.message : String(err));
     } finally {
       setGenerating(false);
     }
   };
 
-  const handleSaveSchedule = async () => {
+  return (
+    <div>
+      <PageHeader title="Board Reports" description="A board-ready threat briefing, generated from the current dataset on demand or on a schedule." />
+
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-[var(--gap-grid)] items-start">
+        <Card className="lg:col-span-3">
+          <div className="flex items-center gap-4 mb-6">
+            <IconTile size="lg" tone="ink"><FileText size={20} /></IconTile>
+            <div>
+              <p className="text-lg font-semibold text-ink">Executive threat briefing</p>
+              <p className="text-sm text-text-3">PDF · about 6 pages · figures below are what it will contain</p>
+            </div>
+          </div>
+
+          {preview.loading ? (
+            <Skeleton className="h-56 rounded-[16px] mb-6" />
+          ) : status ? (
+            <div className="e3 p-6 mb-6">
+              <p className="text-xs text-text-3 mb-4">Data as of {formatAsOf(status.as_of)}</p>
+              <div className="grid grid-cols-3 gap-4 pb-5 mb-5 border-b border-line">
+                {[
+                  { v: status.data.avg_risk, l: "Global risk index" },
+                  { v: status.data.countries, l: "Countries monitored" },
+                  { v: status.data.total_threats.toLocaleString(), l: "Threat indicators" },
+                ].map((k) => (
+                  <div key={k.l}>
+                    <p className="num text-2xl font-medium tracking-[-0.03em] text-ink">{k.v}</p>
+                    <p className="text-sm text-text-3 mt-1">{k.l}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-sm font-semibold text-ink mb-3">Highest exposure</p>
+              <ul className="space-y-2.5">
+                {top.map((c) => (
+                  <li key={c.code} className="flex items-center gap-3">
+                    <span className="flex-1 text-base text-text-2">{c.name}</span>
+                    <span className="num text-base font-semibold text-ink">{c.risk_score}</span>
+                    <SeverityBadge severity={c.risk_level} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {genError && <p role="alert" className="text-sm text-sev-critical-text mb-3">The briefing wasn't generated ({genError}). Try again once the backend is reachable.</p>}
+          <Button variant="primary" size="lg" icon={<Download size={17} />} onClick={generate} loading={generating}>
+            {generating ? "Generating briefing" : "Generate and download briefing"}
+          </Button>
+
+          {history.length > 0 && (
+            <ul className="mt-6 space-y-2">
+              {history.map((h, i) => (
+                <li key={i} className="flex items-center gap-3 text-sm">
+                  <CheckCircle2 size={16} className="text-positive" />
+                  <span className="code text-ink flex-1 truncate">{h.name}</span>
+                  <span className="text-text-3">{h.time}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader
+            title="Schedule"
+            description="Recurring briefing for leadership"
+            icon={<CalendarClock size={17} />}
+            actions={sched.data?.configured ? <Badge tone="positive">Configured</Badge> : <Badge>Not set</Badge>}
+          />
+          {sched.loading ? (
+            <div className="space-y-3"><Skeleton className="h-10" /><Skeleton className="h-10" /></div>
+          ) : (
+            <ScheduleForm key={sched.data?.updated_at ?? "unset"} schedule={sched.data} onSaved={sched.setData} />
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function ScheduleForm({ schedule, onSaved }: { schedule: ReportSchedule | null; onSaved: (s: ReportSchedule) => void }) {
+  const [frequency, setFrequency] = useState(schedule?.frequency ?? "weekly");
+  const [email, setEmail] = useState(schedule?.email ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
     setSaving(true);
+    setError(null);
     try {
-      const updated = await updateReportSchedule({ frequency, email });
-      setSchedule(updated);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      onSaved(await updateReportSchedule({ frequency, email }));
+    } catch (err) {
+      setError(`Not saved: ${err instanceof Error ? err.message : err}`);
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="p-8 space-y-6 max-w-5xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100">Reports</h1>
-        <p className="text-sm text-slate-500 mt-1">Executive reporting, on demand and scheduled</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Generate + Preview + History */}
-        <div className="space-y-4">
-          <div className="card-glow p-6">
-            <div className="flex items-start gap-4 mb-5">
-              <div className="w-12 h-12 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
-                <FileText size={22} className="text-sky-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-semibold text-slate-200 mb-1">
-                  Executive Threat Briefing
-                </h3>
-                <p className="text-xs text-slate-500">
-                  A board-ready PDF summarizing current global risk, top origins, and key indicators.
-                </p>
-              </div>
-            </div>
-
-            {/* Live report preview */}
-            {status && (
-              <div className="bg-slate-800/40 rounded-lg p-4 mb-4">
-                <div className="flex items-center gap-1.5 mb-3">
-                  <Eye size={12} className="text-slate-500" />
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                    Live Preview
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div>
-                    <p className="text-xl font-bold text-slate-100">{status.data.avg_risk}</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Global Risk</p>
-                  </div>
-                  <div>
-                    <p className="text-xl font-bold text-slate-100">{status.data.countries}</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Countries</p>
-                  </div>
-                  <div>
-                    <p className="text-xl font-bold text-slate-100">{status.data.total_threats.toLocaleString()}</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Indicators</p>
-                  </div>
-                </div>
-                {topCountries.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">Top Risk Origins</p>
-                    {topCountries.map((c) => (
-                      <div key={c.code} className="flex items-center justify-between text-xs">
-                        <span className="text-slate-300">{c.name}</span>
-                        <span className="font-semibold" style={{ color: RISK_COLOR[c.risk_level] }}>
-                          {c.risk_score}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {genError && <p className="text-xs text-rose-400 mb-3">Error: {genError}</p>}
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="w-full flex items-center justify-center gap-2 bg-sky-500 text-white font-semibold text-sm px-4 py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              {generating ? (
-                <><Loader2 size={16} className="animate-spin" /> Generating...</>
-              ) : (
-                <><Download size={16} /> Generate & Download PDF</>
-              )}
-            </button>
-          </div>
-
-          {history.length > 0 && (
-            <div>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                Report History (this session)
-              </h3>
-              <div className="space-y-2">
-                {history.map((h, i) => (
-                  <div key={i} className="card-glow px-4 py-3 flex items-center gap-3">
-                    <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-slate-200 truncate">{h.name}</p>
-                      <p className="text-xs text-slate-500">{h.time}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Schedule */}
-        <div className="card-glow p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Calendar size={16} className="text-violet-400" />
-              <h3 className="text-sm font-semibold text-slate-200">Report Schedule</h3>
-            </div>
-            {schedule?.configured && (
-              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                Configured
-              </span>
-            )}
-          </div>
-
-          <div className="space-y-3 mb-4">
-            <div>
-              <label className="text-xs text-slate-500 block mb-1">Frequency</label>
-              <select
-                value={frequency}
-                onChange={(e) => setFrequency(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500/50"
-              >
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-slate-500 block mb-1">Delivery Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="ciso@yourcompany.com"
-                className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-sky-500/50"
-              />
-            </div>
-          </div>
-
-          <button
-            onClick={handleSaveSchedule}
-            disabled={saving}
-            className="w-full flex items-center justify-center gap-1.5 text-sm bg-sky-500 text-white font-semibold rounded-lg py-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {saved ? (
-              <><CheckCircle2 size={14} /> Saved</>
-            ) : saving ? (
-              "Saving..."
-            ) : (
-              <><Save size={14} /> Save Schedule</>
-            )}
-          </button>
-
-          {schedule?.next_run && (
-            <p className="text-[11px] text-slate-500 mt-3">
-              Next scheduled run: {formatTimestamp(schedule.next_run)}
-            </p>
-          )}
-
-          <p className="text-[11px] text-slate-600 mt-3 pt-3 border-t border-slate-800">
-            {schedule?.delivery_active
-              ? "Automated email delivery is active."
-              : "Schedule is saved. Automated email delivery is not yet wired to an SMTP dispatcher — this is planned for a future phase."}
-          </p>
-        </div>
-      </div>
-    </div>
+    <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); save(); }}>
+      <SelectField label="Frequency" value={frequency} onChange={(e) => setFrequency(e.target.value)}>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </SelectField>
+      <TextField label="Deliver to" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ciso@yourcompany.com" />
+      <Button type="submit" variant="primary" className="w-full" loading={saving}>Save schedule</Button>
+      {error && <p role="alert" className="text-sm text-sev-critical-text">{error}</p>}
+      {schedule?.updated_at && <p role="status" className="text-sm text-positive">Schedule saved {formatTs(schedule.updated_at)}</p>}
+      {schedule?.next_run && <p className="text-sm text-text-2">Next run: <span className="num">{formatTs(schedule.next_run)}</span></p>}
+      <p className="text-sm text-text-3 pt-4 border-t border-line leading-relaxed">
+        {schedule?.delivery_active
+          ? "Automated email delivery is active."
+          : "The schedule is saved. Automatic email delivery isn't connected to a mail server yet, so generate the briefing manually for now."}
+      </p>
+    </form>
   );
 }

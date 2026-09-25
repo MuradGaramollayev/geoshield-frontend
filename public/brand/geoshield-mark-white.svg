@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" fill="none" role="img" aria-label="GeoShield">
+<title>GeoShield</title>
+<path d="M24 3.2 L43 10.6 L40.8 27.4 L24 44.8 L7.2 27.4 L5 10.6 Z" stroke="#FFFFFF" stroke-width="2.2" stroke-linejoin="miter" stroke-miterlimit="8"/>
+<circle cx="24" cy="21.5" r="10.2" stroke="#FFFFFF" stroke-width="1.5" opacity="0.3"/>
+<ellipse cx="24" cy="21.5" rx="10.2" ry="3.5" stroke="#FFFFFF" stroke-width="1.5" opacity="0.62"/>
+<ellipse cx="24" cy="21.5" rx="4.1" ry="10.2" stroke="#FFFFFF" stroke-width="1.5" opacity="0.62"/>
+<path d="M24 21.5 L28.3 17.9" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round"/>
+<circle cx="31.4" cy="15.2" r="3.3" stroke="#FFFFFF" stroke-width="1.9"/>
+<circle cx="31.4" cy="15.2" r="1.25" fill="#FFFFFF"/>
+</svg>

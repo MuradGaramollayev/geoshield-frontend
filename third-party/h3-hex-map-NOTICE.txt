@@ -1,0 +1,11 @@
+H3 Hex Map
+Copyright 2026 FARAD Technologies
+
+This product includes software developed by FARAD Technologies.
+
+Licensed under the Apache License, Version 2.0. Any redistribution of this
+software or of works derived from it, in source or object form, must retain
+the copyright notice above and include a readable copy of this NOTICE, as
+required by Section 4 of the License. The name "FARAD Technologies" may not be
+used to endorse or promote derived products, and derived works may not be
+presented as originating from FARAD Technologies without written permission.

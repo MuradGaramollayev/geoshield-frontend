@@ -1,165 +1,206 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useAsync } from "../../hooks/useAsync";
+import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { AlertTriangle, Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { fetchCountries, fetchCountryForecast, fetchGlobalForecast } from "../../services/api";
+import type { CountryRisk, ForecastResult } from "../../services/api";
+import { useTheme } from "../../design/themeContext";
+import { ChartTooltip } from "../../design/ChartTooltip";
 import {
-  Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ComposedChart,
-} from "recharts";
-import { TrendingUp, TrendingDown, Minus, Info, Globe2, AlertTriangle } from "lucide-react";
-import { fetchGlobalForecast, fetchCountryForecast, fetchCountries } from "../../services/api";
-import type { ForecastResult, CountryRisk } from "../../services/api";
+  Card, CardHeader, ErrorState, KeyValue, MethodologyNote, PageHeader, Segmented, SelectField, SkeletonCard,
+} from "../../components/ui";
 
-const TREND_CONFIG = {
-  up: { color: "#f43f5e", icon: TrendingUp, label: "Trending Up" },
-  down: { color: "#34d399", icon: TrendingDown, label: "Trending Down" },
-  stable: { color: "#38bdf8", icon: Minus, label: "Stable" },
+const WINDOWS = [
+  { value: "30", label: "30d" },
+  { value: "90", label: "90d" },
+  { value: "180", label: "180d" },
+  { value: "365", label: "365d" },
+];
+
+const TREND = {
+  up: { icon: TrendingUp, label: "Exposure is rising", tone: "bg-accent-100 text-accent-ink" },
+  down: { icon: TrendingDown, label: "Exposure is easing", tone: "bg-positive-tint text-positive" },
+  stable: { icon: Minus, label: "Exposure is holding steady", tone: "bg-sunken text-text-2" },
 };
 
 export default function RiskForecast() {
-  const [forecast, setForecast] = useState<ForecastResult | null>(null);
+  const th = useTheme();
   const [countries, setCountries] = useState<CountryRisk[]>([]);
-  const [selectedCode, setSelectedCode] = useState<string>("GLOBAL");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [selectedCode, setSelectedCode] = useState<string>(params.get("country") ?? "GLOBAL");
+  const [windowDays, setWindowDays] = useState("90");
 
   useEffect(() => {
     fetchCountries().then((d) => setCountries(d.countries));
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    const promise = selectedCode === "GLOBAL"
-      ? fetchGlobalForecast()
-      : fetchCountryForecast(selectedCode);
-    promise
-      .then(setForecast)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [selectedCode]);
+  const req = useAsync<ForecastResult>(
+    () =>
+      selectedCode === "GLOBAL"
+        ? fetchGlobalForecast(Number(windowDays))
+        : fetchCountryForecast(selectedCode, Number(windowDays)),
+    [selectedCode, windowDays],
+  );
+  const { data: forecast, loading, error } = req;
 
-  if (loading && !forecast) return <div className="p-8 text-slate-400 text-sm">Loading forecast...</div>;
-  if (error) return <div className="p-8 text-rose-400 text-sm">Error: {error}</div>;
-  if (!forecast) return null;
+  const trend = forecast ? TREND[forecast.trend] ?? TREND.stable : TREND.stable;
+  const TrendIcon = trend.icon;
 
-  const trendCfg = TREND_CONFIG[forecast.trend] || TREND_CONFIG.stable;
-  const TrendIcon = trendCfg.icon;
-
-  const chartData = [
-    ...forecast.history.map((h) => ({
-      date: h.date.slice(5),
-      actual: h.count,
-      predicted: null as number | null,
-      lower: null as number | null,
-      upper: null as number | null,
-    })),
-    ...forecast.forecast.map((f) => ({
-      date: f.date.slice(5),
-      actual: null as number | null,
-      predicted: f.predicted,
-      lower: f.lower_bound,
-      upper: f.upper_bound,
-    })),
-  ];
+  const chartData = forecast
+    ? [
+        ...forecast.history.map((h) => ({ date: h.date.slice(5), actual: h.count, predicted: null as number | null, band: null as [number, number] | null })),
+        ...forecast.forecast.map((f) => ({ date: f.date.slice(5), actual: null as number | null, predicted: f.predicted, band: [f.lower_bound, f.upper_bound] as [number, number] })),
+      ]
+    : [];
 
   return (
-    <div className="p-8 space-y-6 max-w-6xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100">Risk Forecast</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Predictive threat trend, based on 30 days of real event history
-        </p>
-      </div>
+    <div>
+      <PageHeader
+        title="Risk Forecast"
+        description="Where threat activity is heading over the next 7 days, projected from real dated history."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+          <Segmented
+            options={WINDOWS}
+            value={windowDays}
+            onChange={setWindowDays}
+            size="sm"
+            ariaLabel="History window"
+          />
+          <SelectField value={selectedCode} onChange={(e) => setSelectedCode(e.target.value)} aria-label="Forecast scope" className="w-64">
+            <option value="GLOBAL">Global</option>
+            {countries
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((c) => (
+                <option key={c.code} value={c.code}>{c.name}</option>
+              ))}
+          </SelectField>
+          </div>
+        }
+      />
 
-      <div className="flex items-center gap-2">
-        <Globe2 size={16} className="text-slate-500" />
-        <select
-          value={selectedCode}
-          onChange={(e) => setSelectedCode(e.target.value)}
-          className="bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500/50"
-        >
-          <option value="GLOBAL">Global</option>
-          {countries
-            .slice()
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map((c) => (
-              <option key={c.code} value={c.code}>{c.name}</option>
-            ))}
-        </select>
-      </div>
+      {error ? (
+        <ErrorState message={error} onRetry={req.reload} />
+      ) : !forecast ? (
+        <SkeletonCard tall />
+      ) : (
+        <div className={`space-y-[var(--gap-grid)] transition-opacity duration-[var(--dur)] ${loading ? "opacity-50" : ""}`}>
+          {forecast.low_data_warning && (
+            <div role="note" className="flex items-start gap-3 rounded-[16px] bg-caution-tint px-5 py-4">
+              <AlertTriangle size={18} className="text-caution shrink-0 mt-0.5" />
+              <p className="text-base text-caution">
+                {forecast.low_data_reason ||
+                  "There are too few dated events in this window to read a direction from."}
+              </p>
+            </div>
+          )}
 
-      {forecast.low_data_warning && (
-        <div className="card-glow p-4 flex items-start gap-3 border-amber-500/30">
-          <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-400">
-            Event volume for this scope is very low, the trend below may not be
-            statistically meaningful. Consider viewing the Global forecast for a
-            more reliable signal.
-          </p>
+          <Card>
+            <div className="flex flex-wrap items-center gap-6">
+              <span className={`w-16 h-16 rounded-[18px] inline-flex items-center justify-center ${trend.tone}`}>
+                <TrendIcon size={28} />
+              </span>
+              <div className="flex-1 min-w-[240px]">
+                <p className="text-xl font-semibold text-ink tracking-[-0.01em]">{trend.label}</p>
+                <p className="text-base text-text-2">
+                  {forecast.series_source === "country"
+                    ? `Expected change in ${forecast.country_name}'s own daily event volume over the next 7 days`
+                    : "Expected change in daily event volume over the next 7 days"}
+                </p>
+                {forecast.change_is_global && (
+                  <p className="text-sm text-text-3 mt-1">
+                    This is the global direction. There is no per-country daily series in the data, so only
+                    the level below is scaled &mdash; by {forecast.country_name}&apos;s{" "}
+                    {forecast.basis.share_percent}% share of indicators.
+                  </p>
+                )}
+              </div>
+              <p className="num text-4xl font-medium tracking-[-0.04em] text-ink">
+                {forecast.expected_change_percent >= 0 ? "+" : ""}
+                {forecast.expected_change_percent}%
+              </p>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title={`${forecast.basis.window_days}-day history and 7-day projection`}
+              description={`${forecast.series_label ?? "Daily event count"}, to ${forecast.basis.anchor ?? ""}`}
+            />
+            <ResponsiveContainer width="100%" height={340}>
+              <ComposedChart data={chartData} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
+                <CartesianGrid stroke={th.chart.gridStroke} vertical={false} />
+                <XAxis dataKey="date" tick={th.chart.axisTick} axisLine={false} tickLine={false} interval={4} />
+                <YAxis tick={th.chart.axisTick} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
+                <Tooltip
+                  content={
+                    <ChartTooltip
+                      format={(v) => (Array.isArray(v) ? `${(v as number[])[0]}–${(v as number[])[1]}` : String(v))}
+                    />
+                  }
+                />
+                <Area type="monotone" dataKey="band" name="Confidence band" stroke="none" fill={th.c.accent} fillOpacity={0.14} isAnimationActive={false} />
+                <Line type="monotone" dataKey="actual" name="Recorded events" stroke={th.c.ink2} strokeWidth={2} dot={false} connectNulls={false} />
+                <Line type="monotone" dataKey="predicted" name="Projected events" stroke={th.c.accent} strokeWidth={2.25} strokeDasharray="6 5" dot={false} connectNulls={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+            <div className="flex flex-wrap items-center gap-6 mt-4 text-sm text-text-2">
+              <span className="flex items-center gap-2"><span className="w-4 h-0.5 bg-ink-2" /> Recorded events</span>
+              <span className="flex items-center gap-2"><span className="w-4 border-t-2 border-dashed border-accent" /> Projection</span>
+              <span className="flex items-center gap-2"><span className="w-4 h-2.5 rounded-sm bg-accent/15" /> Confidence band</span>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="What this rests on"
+              description="The evidence behind the projection, stated so the numbers above can be checked."
+            />
+            <div className="grid gap-x-8 sm:grid-cols-2">
+              <KeyValue
+                label={`Dated events in the last ${forecast.basis.window_days} days`}
+                value={`${forecast.basis.dated_events} across ${forecast.basis.active_days} active days`}
+              />
+              <KeyValue
+                label="Undated rows excluded"
+                value={
+                  forecast.basis.undated_events_excluded === 0
+                    ? "none"
+                    : `${forecast.basis.undated_events_excluded} C2 rows (no date in the feed)`
+                }
+              />
+              {forecast.basis.country_history_days !== undefined && forecast.series_source === "country" && (
+                <KeyValue
+                  label="This country's own dated history"
+                  value={`${forecast.basis.country_history_days} active days, ${forecast.basis.country_history_first} to ${forecast.basis.country_history_last}`}
+                />
+              )}
+              {forecast.basis.country_indicators !== undefined && (
+                <KeyValue
+                  label="This country's indicators"
+                  value={`${forecast.basis.country_indicators.toLocaleString()} · ${forecast.basis.share_percent}% of all`}
+                />
+              )}
+              {forecast.basis.recorded_history_days !== undefined && (
+                <KeyValue
+                  label="Recorded risk-score history"
+                  value={
+                    forecast.basis.recorded_history_days > 0
+                      ? `${forecast.basis.recorded_history_days} daily snapshot(s), ${forecast.basis.recorded_trend}`
+                      : "no snapshots yet"
+                  }
+                />
+              )}
+            </div>
+          </Card>
+
+          <MethodologyNote>
+            <p>{forecast.methodology}</p>
+          </MethodologyNote>
         </div>
       )}
-
-      <div className="card-glow p-6 flex items-center gap-6">
-        <div
-          className="w-16 h-16 rounded-full flex items-center justify-center shrink-0"
-          style={{ background: `${trendCfg.color}15`, border: `1px solid ${trendCfg.color}30` }}
-        >
-          <TrendIcon size={28} style={{ color: trendCfg.color }} />
-        </div>
-        <div>
-          <p className="text-lg font-bold" style={{ color: trendCfg.color }}>
-            {trendCfg.label}
-          </p>
-          <p className="text-sm text-slate-400">
-            {forecast.expected_change_percent >= 0 ? "+" : ""}
-            {forecast.expected_change_percent}% expected change over the next 7 days
-            {forecast.country_name ? ` for ${forecast.country_name}` : ""}
-          </p>
-        </div>
-      </div>
-
-      <div className="card-glow p-6">
-        <h3 className="text-sm font-semibold text-slate-200 mb-4">
-          30-Day History + 7-Day Forecast
-        </h3>
-        <ResponsiveContainer width="100%" height={320}>
-          <ComposedChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" vertical={false} />
-            <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} interval={4} />
-            <YAxis tick={{ fill: "#64748b", fontSize: 10 }} allowDecimals={false} />
-            <Tooltip
-              contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: "#e2e8f0" }}
-            />
-            <Area type="monotone" dataKey="upper" stroke="none" fill="#38bdf8" fillOpacity={0.08} />
-            <Area type="monotone" dataKey="lower" stroke="none" fill="#0f172a" fillOpacity={1} />
-            <Line type="monotone" dataKey="actual" stroke="#34d399" strokeWidth={2} dot={false} connectNulls={false} />
-            <Line
-              type="monotone"
-              dataKey="predicted"
-              stroke="#38bdf8"
-              strokeWidth={2}
-              strokeDasharray="5 5"
-              dot={false}
-              connectNulls={false}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-        <div className="flex items-center gap-6 mt-4 text-xs text-slate-500">
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-0.5 bg-emerald-400" /> Actual history
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-0.5 border-t-2 border-dashed border-sky-400" /> Forecast
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-2 bg-sky-400/10 border border-sky-400/30" /> Confidence band
-          </span>
-        </div>
-      </div>
-
-      <div className="card-glow p-4 flex items-start gap-3">
-        <Info size={16} className="text-slate-500 shrink-0 mt-0.5" />
-        <p className="text-xs text-slate-500">{forecast.methodology}</p>
-      </div>
     </div>
   );
 }

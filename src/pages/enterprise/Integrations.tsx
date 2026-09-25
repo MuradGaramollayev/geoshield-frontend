@@ -1,57 +1,55 @@
-import { useEffect, useState } from "react";
-import { Plug, TrendingUp } from "lucide-react";
-import Integrations from "../Integrations";
 import { fetchRouting } from "../../services/api";
-import type { RoutingConfig } from "../../services/api";
+import { useAsync } from "../../hooks/useAsync";
+import IntegrationsCatalog from "../../components/common/IntegrationsCatalog";
+import { Card, ErrorState, PageHeader, SegmentGauge, SkeletonCard } from "../../components/ui";
+import { useTheme } from "../../design/themeContext";
 
 export default function EnterpriseIntegrations() {
-  const [routing, setRouting] = useState<RoutingConfig | null>(null);
-
-  useEffect(() => {
-    fetchRouting().then(setRouting);
-  }, []);
-
-  const connected = routing?.integrations.filter((i) => i.connected).length || 0;
-  const total = routing?.integrations.length || 0;
-  const healthScore = total > 0 ? Math.round((connected / total) * 100) : 0;
+  const th = useTheme();
+  const { data, error, loading, reload } = useAsync(fetchRouting, []);
+  const on = data?.integrations.filter((i) => i.connected).length ?? 0;
+  const total = data?.integrations.length ?? 0;
 
   return (
-    <div className="p-8 space-y-6 max-w-4xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100">Integrations</h1>
-        <p className="text-sm text-slate-500 mt-1">Enterprise-wide connector health</p>
-      </div>
+    <div>
+      <PageHeader
+        title="Integrations"
+        description="How far GeoShield alerts reach into your existing tools, and what's on the roadmap."
+      />
 
-      {/* Enterprise-only: Integration Health Score, real from Alert routing config */}
-      <div className="card-glow p-6 flex items-center gap-6">
-        <div className="w-16 h-16 rounded-full flex items-center justify-center shrink-0"
-          style={{ background: `conic-gradient(#38bdf8 ${healthScore * 3.6}deg, rgba(148,163,184,0.1) 0deg)` }}
-        >
-          <div className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center">
-            <span className="text-sm font-bold text-sky-400">{healthScore}%</span>
+      {error ? (
+        <ErrorState message={error} onRetry={reload} />
+      ) : loading ? (
+        <SkeletonCard lines={2} className="mb-[var(--gap-grid)]" />
+      ) : (
+        <Card className="mb-[var(--gap-grid)]">
+          <div className="flex flex-col md:flex-row md:items-center gap-8">
+            <SegmentGauge
+              size={220}
+              segments={[
+                { value: on, color: th.c.accent, label: "Routing on" },
+                { value: Math.max(total - on, 0), color: th.c.accent200, label: "Routing off" },
+              ]}
+              center={
+                <>
+                  {on}
+                  <span className="text-text-3 text-xl"> / {total}</span>
+                </>
+              }
+              caption="channels routed"
+            />
+            <div className="max-w-[60ch]">
+              <p className="text-xl font-semibold text-ink tracking-[-0.01em] mb-2">Routing coverage</p>
+              <p className="text-base text-text-2">
+                {on} of {total} alert channels have routing turned on. The preference is stored today; automatic
+                delivery to these channels and the SIEM and EDR connectors below are planned.
+              </p>
+            </div>
           </div>
-        </div>
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingUp size={14} className="text-sky-400" />
-            <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
-              Integration Health Score
-            </span>
-          </div>
-          <p className="text-sm text-slate-400">
-            {connected} of {total} routing integrations connected
-            {" "}(configured in Alert Center → Routing Status)
-          </p>
-        </div>
-      </div>
+        </Card>
+      )}
 
-      <div className="card-glow p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Plug size={16} className="text-emerald-400" />
-          <h3 className="text-sm font-semibold text-slate-200">Available Connectors</h3>
-        </div>
-        <Integrations alertCenterPath="/enterprise/alerts" />
-      </div>
+      {!loading && !error && <IntegrationsCatalog routing={data} alertsPath="/enterprise/alerts" />}
     </div>
   );
 }
