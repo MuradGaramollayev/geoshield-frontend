@@ -47,6 +47,12 @@ export default function RiskForecast() {
   const trend = forecast ? TREND[forecast.trend] ?? TREND.stable : TREND.stable;
   const TrendIcon = trend.icon;
 
+  // One marker per recorded day, so it is visible that the line is fitted to
+  // individual real observations. The radius shrinks as the window grows, or
+  // 365 daily points would merge into a band.
+  const points = forecast?.history.length ?? 0;
+  const pointRadius = points <= 60 ? 2.6 : points <= 120 ? 1.9 : 1.2;
+
   const chartData = forecast
     ? [
         ...forecast.history.map((h) => ({ date: h.date.slice(5), actual: h.count, predicted: null as number | null, band: null as [number, number] | null })),
@@ -142,12 +148,27 @@ export default function RiskForecast() {
                   }
                 />
                 <Area type="monotone" dataKey="band" name="Confidence band" stroke="none" fill={th.c.accent} fillOpacity={0.14} isAnimationActive={false} />
-                <Line type="monotone" dataKey="actual" name="Recorded events" stroke={th.c.ink2} strokeWidth={2} dot={false} connectNulls={false} />
+                <Line
+                  type="monotone"
+                  dataKey="actual"
+                  name="Recorded events"
+                  stroke={th.c.ink2}
+                  strokeWidth={2}
+                  dot={{ r: pointRadius, fill: th.c.ink2, stroke: "none" }}
+                  activeDot={{ r: 4.5, fill: th.c.ink2, stroke: th.c.surface, strokeWidth: 2 }}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
                 <Line type="monotone" dataKey="predicted" name="Projected events" stroke={th.c.accent} strokeWidth={2.25} strokeDasharray="6 5" dot={false} connectNulls={false} />
               </ComposedChart>
             </ResponsiveContainer>
             <div className="flex flex-wrap items-center gap-6 mt-4 text-sm text-text-2">
-              <span className="flex items-center gap-2"><span className="w-4 h-0.5 bg-ink-2" /> Recorded events</span>
+              <span className="flex items-center gap-2">
+                <span className="relative inline-block w-4 h-0.5 bg-ink-2">
+                  <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink-2" />
+                </span>
+                Recorded events · one point per day
+              </span>
               <span className="flex items-center gap-2"><span className="w-4 border-t-2 border-dashed border-accent" /> Projection</span>
               <span className="flex items-center gap-2"><span className="w-4 h-2.5 rounded-sm bg-accent/15" /> Confidence band</span>
             </div>
